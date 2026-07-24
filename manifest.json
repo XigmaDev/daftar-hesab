@@ -1,0 +1,32 @@
+{
+  "name": "دفتر تراکنش — مدیریت تراکنش‌های بانکی",
+  "short_name": "دفتر تراکنش",
+  "description": "مدیریت کاملاً آفلاین تراکنش‌های بانکی از روی پیامک، با دسته‌بندی، گزارش‌گیری و داشبورد.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0B3436",
+  "theme_color": "#114B4F",
+  "dir": "rtl",
+  "lang": "fa-IR",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "افزودن تراکنش",
+      "short_name": "افزودن",
+      "url": "./index.html#/transactions/new",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "کارتابل",
+      "short_name": "کارتابل",
+      "url": "./index.html#/inbox",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

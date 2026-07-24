@@ -1,0 +1,19 @@
+{
+  "appId": "ir.local.daftartarakonesh",
+  "appName": "دفتر تراکنش",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#0B3436",
+      "showSpinner": false
+    }
+  }
+}

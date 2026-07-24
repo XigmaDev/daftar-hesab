@@ -1,0 +1,443 @@
+/* ==========================================================================
+   دفتر تراکنش — سیستم طراحی
+   الهام‌گرفته از Material Design 3، با هویت بصری اختصاصی:
+   رنگ اصلی «سبز-نیلی دفتری» + طلایی برنجی به‌عنوان رنگ تاکیدی،
+   و نگاره‌ی ستاره‌ی هشت‌پر (گره‌چینی ایرانی) به‌عنوان امضای بصری.
+   ========================================================================== */
+
+@font-face {
+  /* در صورت وجود فونت فارسی نصب‌شده روی سیستم، استفاده می‌شود؛ در غیر این صورت fallback عمومی */
+  font-family: 'AppFaFont';
+  src: local('Vazirmatn'), local('Vazir'), local('IRANSansX'), local('IRANSans'), local('Samim');
+  font-weight: 100 900;
+}
+
+:root {
+  --bg: #EEF4F1;
+  --surface: #FFFFFF;
+  --surface-alt: #E6EFEA;
+  --surface-raised: #FFFFFF;
+  --primary: #114B4F;
+  --primary-dark: #0B3436;
+  --on-primary: #F3FBF8;
+  --accent: #C99A3E;
+  --accent-soft: #F1E2BE;
+  --deposit: #2E7D5B;
+  --deposit-soft: #DCEEE4;
+  --withdraw: #B4433B;
+  --withdraw-soft: #F6DEDC;
+  --text: #14201F;
+  --text-muted: #5B6A66;
+  --text-faint: #8A9995;
+  --border: #D8E2DE;
+  --shadow: 0 6px 20px -8px rgba(11, 52, 54, 0.28);
+  --shadow-sm: 0 2px 8px -2px rgba(11, 52, 54, 0.18);
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
+  --font-display: 'AppFaFont', 'Segoe UI', Tahoma, sans-serif;
+  --font-body: 'AppFaFont', 'Segoe UI', Tahoma, sans-serif;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0B1716;
+  --surface: #10201F;
+  --surface-alt: #16302D;
+  --surface-raised: #14302D;
+  --primary: #52A79A;
+  --primary-dark: #0B3436;
+  --on-primary: #06201E;
+  --accent: #E0B564;
+  --accent-soft: #3B331C;
+  --deposit: #56C596;
+  --deposit-soft: #143327;
+  --withdraw: #E58A80;
+  --withdraw-soft: #391B18;
+  --text: #E7F1EE;
+  --text-muted: #9FB6B0;
+  --text-faint: #6D8985;
+  --border: #1E3937;
+  --shadow: 0 6px 24px -8px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 2px 10px -2px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  direction: rtl;
+  font-variant-numeric: tabular-nums;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; font-weight: 800; letter-spacing: -0.01em; }
+p { margin: 0; }
+ul { list-style: none; margin: 0; padding: 0; }
+button { font-family: inherit; }
+a { color: inherit; text-decoration: none; }
+
+/* --- قاب اصلی برنامه (موبایل) --- */
+#app-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* --- نوار بالای صفحه --- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: var(--on-primary);
+  border-radius: 0 0 20px 20px;
+  box-shadow: var(--shadow-sm);
+}
+.topbar h1 { font-size: 19px; color: var(--on-primary); flex: 1; }
+.topbar .icon-btn { color: var(--on-primary); }
+.topbar .subtitle { font-size: 12px; opacity: 0.78; display:block; margin-top:2px; font-weight:500;}
+
+.icon-btn {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; border-radius: 50%;
+  cursor: pointer; color: var(--text); flex-shrink: 0;
+  transition: background .15s ease;
+}
+.icon-btn:hover { background: rgba(120,120,120,.12); }
+.icon-btn svg { width: 22px; height: 22px; }
+
+/* --- محتوای اصلی --- */
+main.page {
+  flex: 1;
+  padding: 16px 16px 96px;
+  animation: fadeIn .22s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity:1; transform:none; } }
+
+/* --- کارت‌ها --- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.card + .card { margin-top: 12px; }
+
+/* --- کارت موجودی داشبورد (عنصر شاخص/سیگنیچر) --- */
+.balance-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  background: radial-gradient(120% 140% at 100% 0%, #1B5F62 0%, var(--primary) 45%, var(--primary-dark) 100%);
+  color: var(--on-primary);
+  box-shadow: var(--shadow);
+}
+.balance-hero::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: var(--girih-pattern);
+  background-size: 120px 120px;
+  opacity: .10;
+  mix-blend-mode: screen;
+}
+.balance-hero .label { font-size: 13px; opacity: .82; font-weight: 600; }
+.balance-hero .amount { font-family: var(--font-display); font-size: 32px; font-weight: 800; margin: 6px 0 14px; position: relative; }
+.balance-hero .amount small { font-size: 14px; font-weight: 600; opacity: .8; margin-inline-start: 6px; }
+.balance-hero .row { display: flex; gap: 10px; position: relative; }
+.balance-hero .stat { flex: 1; background: rgba(255,255,255,.10); border-radius: var(--radius-sm); padding: 10px 12px; backdrop-filter: blur(2px); }
+.balance-hero .stat .k { font-size: 11px; opacity: .78; }
+.balance-hero .stat .v { font-size: 15px; font-weight: 800; margin-top: 2px; }
+.balance-hero .stat.deposit .v { color: #9CE8C4; }
+.balance-hero .stat.withdraw .v { color: #F3B3AB; }
+
+/* --- تب‌های بازه زمانی --- */
+.period-tabs { display: flex; gap: 6px; margin: 14px 0 10px; overflow-x: auto; padding-bottom: 2px; }
+.period-tabs button {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+  padding: 7px 14px; border-radius: 999px; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+  font-weight: 600; transition: all .15s ease;
+}
+.period-tabs button.active { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+
+/* --- بخش عنوان --- */
+.section-title { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 10px; }
+.section-title h2 { font-size: 15px; }
+.section-title .link { font-size: 12.5px; color: var(--primary); font-weight: 700; cursor: pointer; }
+[data-theme="dark"] .section-title .link { color: var(--accent); }
+
+/* --- گرید آمار --- */
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; }
+.stat-card .k { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.stat-card .v { font-size: 18px; font-weight: 800; margin-top: 6px; }
+
+/* --- نمودارها --- */
+.chart-svg, .donut-svg { width: 100%; height: auto; display: block; }
+.chart-axis { stroke: var(--border); stroke-width: 1; }
+.chart-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart-line--deposit { stroke: var(--deposit); }
+.chart-line--withdraw { stroke: var(--withdraw); }
+.chart-legend { display: flex; gap: 10px; margin-top: 8px; justify-content: center; }
+.donut-legend { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.donut-legend li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-muted); }
+.donut-legend b { color: var(--text); margin-inline-start: auto; font-weight: 700; }
+.donut-legend .dot, .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.chart-row { display: flex; align-items: center; gap: 14px; }
+
+/* --- چیپ‌ها --- */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+}
+.chip--deposit { background: var(--deposit-soft); color: var(--deposit); }
+.chip--withdraw { background: var(--withdraw-soft); color: var(--withdraw); }
+.chip--new { background: var(--accent-soft); color: #8A6417; }
+[data-theme="dark"] .chip--new { color: var(--accent); }
+.chip--muted { background: var(--surface-alt); color: var(--text-muted); }
+
+/* --- لیست تراکنش‌ها --- */
+.tx-list { display: flex; flex-direction: column; gap: 8px; }
+.tx-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 12px 14px;
+  cursor: pointer; transition: transform .12s ease, box-shadow .12s ease;
+}
+.tx-item:active { transform: scale(.98); }
+.tx-item .avatar {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 14px; color: var(--on-primary);
+  background: var(--primary);
+}
+.tx-item .avatar.withdraw { background: var(--withdraw); }
+.tx-item .avatar.deposit { background: var(--deposit); }
+.tx-item .info { flex: 1; min-width: 0; }
+.tx-item .info .top { display: flex; justify-content: space-between; gap: 8px; }
+.tx-item .bank { font-weight: 700; font-size: 13.5px; }
+.tx-item .meta { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tx-item .amount { font-weight: 800; font-size: 14.5px; white-space: nowrap; }
+.tx-item .amount.deposit { color: var(--deposit); }
+.tx-item .amount.withdraw { color: var(--withdraw); }
+.tx-item .tags-line { margin-top: 5px; display: flex; gap: 5px; flex-wrap: wrap; }
+
+/* --- انتخاب چندتایی --- */
+.tx-item.selectable { position: relative; }
+.tx-item .check {
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+}
+.tx-item.checked .check { background: var(--primary); border-color: var(--primary); }
+.tx-item.checked .check::after { content: '✓'; color: var(--on-primary); font-size: 12px; font-weight: 900; }
+
+/* --- فیلترها --- */
+.filter-bar { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; }
+.filter-bar .icon-btn { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.search-input {
+  width: 100%; padding: 12px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-size: 13.5px; outline: none;
+}
+.search-input:focus { border-color: var(--primary); }
+
+/* --- فرم‌ها --- */
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 12px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-size: 14px; outline: none; font-family: inherit;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent); }
+.field textarea { resize: vertical; min-height: 70px; }
+.field-error { color: var(--withdraw); font-size: 11.5px; margin-top: 5px; font-weight: 600; }
+.field.has-error input, .field.has-error select, .field.has-error textarea { border-color: var(--withdraw); }
+.seg-control { display: flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.seg-control button { flex: 1; padding: 11px; background: var(--surface); border: none; cursor: pointer; font-weight: 700; font-size: 13px; color: var(--text-muted); }
+.seg-control button.active.deposit { background: var(--deposit-soft); color: var(--deposit); }
+.seg-control button.active.withdraw { background: var(--withdraw-soft); color: var(--withdraw); }
+
+/* --- دکمه‌ها --- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 13px 18px; border-radius: 14px; border: none; cursor: pointer;
+  font-weight: 700; font-size: 14px; font-family: inherit; transition: opacity .15s, transform .1s;
+  width: 100%;
+}
+.btn:active { transform: scale(.98); }
+.btn-primary { background: var(--primary); color: var(--on-primary); }
+.btn-accent { background: var(--accent); color: #2A1E05; }
+.btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+.btn-ghost { background: var(--surface-alt); color: var(--text); }
+.btn-danger { background: var(--withdraw-soft); color: var(--withdraw); }
+.btn-row { display: flex; gap: 10px; }
+.btn-row .btn { width: auto; flex: 1; }
+
+/* --- FAB --- */
+.fab {
+  position: fixed; bottom: 86px; left: 50%;
+  transform: translateX(calc(-50% + 210px));
+  width: 58px; height: 58px; border-radius: 20px;
+  background: var(--accent); color: #2A1E05; border: none;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 24px -6px rgba(201,154,62,.55);
+  cursor: pointer; z-index: 30;
+}
+.fab svg { width: 26px; height: 26px; }
+@media (max-width: 480px) { .fab { transform: none; left: auto; right: 18px; } }
+
+/* --- نوار پایین (ناوبری) --- */
+.bottom-nav {
+  position: sticky; bottom: 0; z-index: 25;
+  max-width: 480px; margin: 0 auto; width: 100%;
+  display: flex; background: var(--surface); border-top: 1px solid var(--border);
+  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 16px -8px rgba(0,0,0,.15);
+}
+.bottom-nav a {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 6px 2px; border-radius: 12px; color: var(--text-faint); font-size: 10.5px; font-weight: 700;
+}
+.bottom-nav a svg { width: 21px; height: 21px; }
+.bottom-nav a.active { color: var(--primary); }
+[data-theme="dark"] .bottom-nav a.active { color: var(--accent); }
+
+/* --- کارتابل: وضعیت خالی --- */
+.empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); }
+.empty-state .icon-wrap {
+  width: 84px; height: 84px; margin: 0 auto 16px; border-radius: 28px;
+  background: var(--surface-alt); display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.empty-state .icon-wrap::before { content:""; position:absolute; inset:0; background-image: var(--girih-pattern); background-size: 60px 60px; opacity:.18; }
+.empty-state svg { width: 36px; height: 36px; color: var(--primary); position: relative; }
+.empty-state h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; }
+.empty-state p { font-size: 12.5px; line-height: 1.9; }
+
+/* --- بج وضعیت جدید بالای کارتابل --- */
+.inbox-banner {
+  display: flex; align-items: center; gap: 10px; background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 14px; font-size: 12.5px;
+}
+.inbox-banner b { color: var(--accent); }
+[data-theme="dark"] .inbox-banner { color: var(--text); }
+
+/* --- صفحه جزئیات تراکنش --- */
+.detail-amount { text-align: center; padding: 26px 0 10px; }
+.detail-amount .v { font-size: 30px; font-weight: 800; font-family: var(--font-display); }
+.detail-amount .v.deposit { color: var(--deposit); }
+.detail-amount .v.withdraw { color: var(--withdraw); }
+.detail-amount .bank-name { color: var(--text-muted); font-size: 13px; margin-top: 6px; font-weight: 700; }
+.kv-list { display: flex; flex-direction: column; }
+.kv-row { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.kv-row:last-child { border-bottom: none; }
+.kv-row .k { color: var(--text-muted); }
+.kv-row .v { font-weight: 700; max-width: 60%; text-align: left; overflow-wrap: anywhere; }
+.raw-sms-box {
+  background: var(--surface-alt); border-radius: var(--radius-sm); padding: 12px 14px;
+  font-size: 12.5px; line-height: 2; color: var(--text-muted); white-space: pre-wrap; margin-top: 8px;
+}
+
+/* --- دیالوگ/شیت پایین صفحه --- */
+.sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(10,20,19,.5); z-index: 50;
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: fadeIn .18s ease;
+}
+.sheet {
+  width: 100%; max-width: 480px; background: var(--surface);
+  border-radius: 22px 22px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+  max-height: 86vh; overflow-y: auto; box-shadow: 0 -10px 30px rgba(0,0,0,.25);
+}
+.sheet .handle { width: 40px; height: 4px; background: var(--border); border-radius: 4px; margin: 0 auto 14px; }
+.sheet h3 { font-size: 15.5px; margin-bottom: 14px; }
+
+/* --- تنظیمات --- */
+.settings-row {
+  display: flex; align-items: center; gap: 12px; padding: 14px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row .ic { width: 38px; height: 38px; border-radius: 11px; background: var(--surface-alt); display:flex; align-items:center; justify-content:center; flex-shrink:0; color: var(--primary); }
+[data-theme="dark"] .settings-row .ic { color: var(--accent); }
+.settings-row .txt { flex: 1; }
+.settings-row .txt .t { font-size: 13.5px; font-weight: 700; }
+.settings-row .txt .d { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.switch { position: relative; width: 42px; height: 24px; flex-shrink:0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .track { position: absolute; inset: 0; background: var(--border); border-radius: 999px; cursor: pointer; transition: background .15s; }
+.switch .track::after { content:''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 3px; right: 3px; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.switch input:checked + .track { background: var(--primary); }
+.switch input:checked + .track::after { transform: translateX(-18px); }
+
+/* --- بج رنگ برای واحد/دسته --- */
+.color-dot-list { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-dot { width: 28px; height: 28px; border-radius: 9px; cursor: pointer; border: 2px solid transparent; }
+.color-dot.active { border-color: var(--text); }
+
+/* --- توست --- */
+.toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+  background: var(--text); color: var(--bg); padding: 11px 18px; border-radius: 12px;
+  font-size: 13px; font-weight: 700; z-index: 80; box-shadow: var(--shadow); max-width: 90%;
+  animation: fadeIn .18s ease;
+}
+
+/* --- اسپلش --- */
+.splash {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(120% 100% at 50% 0%, #1B5F62 0%, var(--primary-dark) 60%);
+  color: var(--on-primary);
+}
+.splash::before { content:""; position:absolute; inset:0; background-image: var(--girih-pattern); background-size:140px 140px; opacity:.08; }
+.splash .logo { width: 88px; height: 88px; border-radius: 26px; background: rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; margin-bottom: 18px; position: relative; }
+.splash .logo svg { width: 44px; height: 44px; color: var(--accent); }
+.splash h1 { font-size: 19px; color: #fff; position: relative; }
+.splash p { font-size: 12.5px; opacity: .75; margin-top: 6px; position: relative; }
+
+/* --- قفل ورود --- */
+.lock-screen { min-height: 100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap: 18px; padding: 24px; text-align:center; }
+.pin-dots { display: flex; gap: 12px; }
+.pin-dots span { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--primary); }
+.pin-dots span.filled { background: var(--primary); }
+.pin-pad { display: grid; grid-template-columns: repeat(3, 64px); gap: 14px; margin-top: 10px; }
+.pin-pad button { width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); font-size: 20px; font-weight: 800; cursor: pointer; }
+
+/* --- ابزارک کمکی --- */
+.text-muted { color: var(--text-muted); }
+.mt-8 { margin-top: 8px; } .mt-16 { margin-top: 16px; } .mt-24 { margin-top: 24px; }
+.flex-between { display:flex; align-items:center; justify-content:space-between; }
+.hidden { display: none !important; }
+
+:root {
+  --girih-pattern: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='white' stroke-width='1.4'%3E%3Cpath d='M60 6 L86 30 L86 90 L60 114 L34 90 L34 30 Z'/%3E%3Cpath d='M60 6 L60 114 M34 30 L86 90 M86 30 L34 90'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+@media (min-width: 481px) {
+  body { background: linear-gradient(180deg, var(--surface-alt), var(--bg)); }
+  #app-shell { box-shadow: 0 0 60px rgba(0,0,0,.15); min-height: 100vh; }
+}

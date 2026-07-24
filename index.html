@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>دفتر تراکنش — مدیریت تراکنش‌های بانکی</title>
+<meta name="description" content="مدیریت کاملاً آفلاین تراکنش‌های بانکی از روی پیامک" />
+<meta name="theme-color" content="#114B4F" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div id="app-shell">
+  <!-- اسپلش اولیه -->
+  <div class="splash" id="splash-screen">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1 1-1.8 3-1.8s3 .8 3 1.8-1 1.3-3 1.8-3 .8-3 1.9 1 1.8 3 1.8 3-.8 3-1.8"/></svg>
+    </div>
+    <h1>دفتر تراکنش</h1>
+    <p>آفلاین کامل · امن · روی گوشی شما</p>
+  </div>
+
+  <!-- صفحه درخواست مجوزهای اولیه -->
+  <div class="lock-screen hidden" id="permission-screen">
+    <div class="logo" style="background:var(--surface-alt); width:76px; height:76px; border-radius:22px; display:flex; align-items:center; justify-content:center;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </div>
+    <h3 style="font-size:16px;">به دفتر تراکنش خوش آمدید</h3>
+    <p class="text-muted" style="font-size:13px; line-height:2; max-width:320px;">
+      برای استخراج خودکار اطلاعات از پیامک‌های بانکی، به مجوز دسترسی به پیامک و نمایش اعلان نیاز داریم.
+      همه اطلاعات فقط روی همین گوشی ذخیره می‌شود و به هیچ سروری ارسال نمی‌شود.
+    </p>
+    <div style="width:100%; max-width:320px; display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+      <button class="btn btn-primary" id="btn-grant">اجازه دسترسی و ادامه</button>
+      <button class="btn btn-ghost" id="btn-skip">فعلاً رد شو</button>
+    </div>
+    <p class="text-muted" style="font-size:11px; margin-top:14px; max-width:320px; line-height:1.9;">
+      دسترسی خودکار به پیامک فقط در نسخه نصب‌شده اندروید (Capacitor) در دسترس است.
+    </p>
+  </div>
+
+  <!-- صفحه قفل PIN -->
+  <div class="lock-screen hidden" id="lock-screen">
+    <div class="logo" style="background:var(--surface-alt); width:76px; height:76px; border-radius:22px; display:flex; align-items:center; justify-content:center;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:34px;height:34px;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h3 style="font-size:15.5px;">ورود به برنامه</h3>
+    <div class="pin-dots" id="pin-dots"><span></span><span></span><span></span><span></span></div>
+    <div class="pin-pad" id="pin-pad">
+      <button data-k="1">۱</button><button data-k="2">۲</button><button data-k="3">۳</button>
+      <button data-k="4">۴</button><button data-k="5">۵</button><button data-k="6">۶</button>
+      <button data-k="7">۷</button><button data-k="8">۸</button><button data-k="9">۹</button>
+      <button data-k="del">⌫</button><button data-k="0">۰</button><button data-k="ok"></button>
+    </div>
+    <p id="lock-error" class="text-muted" style="font-size:12px; color:var(--withdraw); min-height:16px;"></p>
+  </div>
+
+  <!-- محتوای اصلی برنامه توسط app.js تزریق می‌شود -->
+</div>
+
+<script src="js/db.js"></script>
+<script src="js/smsParser.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/seed.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // ثبت Service Worker برای اجرای کاملاً آفلاین
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+
+  async function boot() {
+    const splash = document.getElementById('splash-screen');
+    const permScreen = document.getElementById('permission-screen');
+    const lockScreen = document.getElementById('lock-screen');
+
+    await new Promise((r) => setTimeout(r, 900));
+
+    const firstRun = !(await DB.get('settings', 'onboarded'))?.value;
+
+    splash.classList.add('hidden');
+
+    if (firstRun) {
+      permScreen.classList.remove('hidden');
+      await new Promise((resolve) => {
+        document.getElementById('btn-grant').onclick = async () => {
+          try {
+            if ('Notification' in window && Notification.permission === 'default') {
+              await Notification.requestPermission();
+            }
+          } catch (e) {}
+          await DB.put('settings', { key: 'onboarded', value: true });
+          await DB.put('settings', { key: 'smsEnabled', value: true });
+          await DB.put('settings', { key: 'notifEnabled', value: true });
+          resolve();
+        };
+        document.getElementById('btn-skip').onclick = async () => {
+          await DB.put('settings', { key: 'onboarded', value: true });
+          resolve();
+        };
+      });
+      permScreen.classList.add('hidden');
+    }
+
+    const pin = (await DB.get('settings', 'pin'))?.value;
+    if (pin) {
+      lockScreen.classList.remove('hidden');
+      await new Promise((resolve) => {
+        let entered = '';
+        const dots = document.querySelectorAll('#pin-dots span');
+        const err = document.getElementById('lock-error');
+        function render() { dots.forEach((d, i) => d.classList.toggle('filled', i < entered.length)); }
+        document.getElementById('pin-pad').addEventListener('click', (e) => {
+          const btn = e.target.closest('button');
+          if (!btn) return;
+          const k = btn.dataset.k;
+          if (k === 'del') { entered = entered.slice(0, -1); err.textContent = ''; render(); return; }
+          if (k === 'ok') return;
+          if (entered.length < 4) entered += k;
+          render();
+          if (entered.length === 4) {
+            // تبدیل ارقام لاتین انتخاب‌شده (که در data-k فارسی نبود) به لاتین برای مقایسه با pin ذخیره‌شده
+            if (entered === pin) { lockScreen.classList.add('hidden'); resolve(); }
+            else { err.textContent = 'رمز اشتباه است'; entered = ''; setTimeout(render, 250); }
+          }
+        });
+      });
+    }
+
+    App.init();
+  }
+
+  boot();
+</script>
+</body>
+</html>

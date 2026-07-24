@@ -1,0 +1,24 @@
+<!--
+  افزودنی‌های لازم به android/app/src/main/AndroidManifest.xml
+  (این فایل جایگزین AndroidManifest.xml نیست؛ فقط بخش‌هایی که باید داخل آن اضافه شوند.)
+-->
+
+<!-- داخل تگ <manifest> و قبل از <application> اضافه شود: -->
+<uses-permission android:name="android.permission.RECEIVE_SMS" />
+<uses-permission android:name="android.permission.READ_SMS" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<!--
+  داخل تگ <application> این Receiver اضافه شود تا حتی وقتی برنامه در پس‌زمینه است
+  نیز پیامک دریافت شود (Manifest-declared receiver). توجه: از اندروید ۸ به بعد
+  محدودیت‌های Background Broadcast وجود دارد؛ برای پایداری کامل، از Foreground Service
+  یا WorkManager هم می‌توان استفاده کرد که خارج از حوصله‌ی این نمونه است.
+-->
+<receiver
+    android:name="ir.local.daftartarakonesh.SmsBroadcastReceiver"
+    android:exported="true"
+    android:permission="android.permission.BROADCAST_SMS">
+    <intent-filter android:priority="999">
+        <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+    </intent-filter>
+</receiver>
