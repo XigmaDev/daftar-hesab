@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write ل
+  contents: write
 
 jobs:
   build:
