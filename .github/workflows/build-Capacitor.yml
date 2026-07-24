@@ -1,5 +1,6 @@
 name: Build Android APK
 
+# اجرا با پوش کردن یک تگ (مثلاً v1.0.0) یا به‌صورت دستی از تب Actions
 on:
   push:
     tags:
@@ -7,11 +8,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write # لازم برای ساخت Release و آپلود فایل
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # 'secrets' context is not allowed directly inside step-level `if:` conditions,
+      # so we pass it through job-level env vars and check those instead.
+      HAS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' }}
 
     steps:
       - name: Checkout repository
@@ -141,7 +146,7 @@ jobs:
         run: chmod +x android/gradlew
 
       - name: Decode signing keystore (optional)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
 
