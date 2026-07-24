@@ -141,10 +141,13 @@ jobs:
               content = f.read()
 
           if "kotlin-gradle-plugin" not in content:
+              classpath_line = (
+                  "        classpath \"org.jetbrains.kotlin:kotlin-gradle-plugin:"
+                  + KOTLIN_VERSION + "\""
+              )
               content = re.sub(
-                  r"(dependencies\s*\{)",
-                  r"\1\n        classpath \"org.jetbrains.kotlin:kotlin-gradle-plugin:"
-                  + KOTLIN_VERSION + "\"",
+                  r"dependencies\s*\{",
+                  lambda m: m.group(0) + "\n" + classpath_line,
                   content,
                   count=1,
               )
@@ -161,15 +164,18 @@ jobs:
 
           if "kotlin-android" not in content:
               content = re.sub(
-                  r"(apply plugin:\s*['\"]com\.android\.application['\"]\s*\n)",
-                  r"\1apply plugin: 'kotlin-android'\n",
+                  r"apply plugin:\s*['\"]com\.android\.application['\"]\s*\n",
+                  lambda m: m.group(0) + "apply plugin: 'kotlin-android'\n",
                   content,
                   count=1,
               )
+              stdlib_line = (
+                  "    implementation \"org.jetbrains.kotlin:kotlin-stdlib:"
+                  + KOTLIN_VERSION + "\""
+              )
               content = re.sub(
-                  r"(dependencies\s*\{)",
-                  r"\1\n    implementation \"org.jetbrains.kotlin:kotlin-stdlib:"
-                  + KOTLIN_VERSION + "\"",
+                  r"dependencies\s*\{",
+                  lambda m: m.group(0) + "\n" + stdlib_line,
                   content,
                   count=1,
               )
