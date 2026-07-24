@@ -123,6 +123,63 @@ jobs:
           cp android-native-sample/SmsReceiverPlugin.kt "$PKG_DIR/SmsReceiverPlugin.kt"
           cp android-native-sample/SmsBroadcastReceiver.kt "$PKG_DIR/SmsBroadcastReceiver.kt"
 
+      - name: Enable Kotlin support in the Android project
+        # پروژه‌ی اندروید تولیدشده توسط `cap add android` به‌صورت پیش‌فرض فقط Java
+        # است و پلاگین Kotlin روش فعال نیست؛ به همین دلیل فایل‌های .kt (از جمله
+        # SmsReceiverPlugin.kt) اصلاً کامپایل نمی‌شدند و import آن‌ها در
+        # MainActivity.java با خطای "cannot find symbol" مواجه می‌شد. این استپ
+        # پلاگین Kotlin را به build.gradle های پروژه اضافه می‌کند.
+        run: |
+          python3 - <<'PYEOF'
+          import re
+
+          KOTLIN_VERSION = "1.9.24"
+
+          # ۱) android/build.gradle (سطح پروژه): افزودن classpath پلاگین کاتلین
+          project_gradle = "android/build.gradle"
+          with open(project_gradle, "r", encoding="utf-8") as f:
+              content = f.read()
+
+          if "kotlin-gradle-plugin" not in content:
+              content = re.sub(
+                  r"(dependencies\s*\{)",
+                  r"\1\n        classpath \"org.jetbrains.kotlin:kotlin-gradle-plugin:"
+                  + KOTLIN_VERSION + "\"",
+                  content,
+                  count=1,
+              )
+              with open(project_gradle, "w", encoding="utf-8") as f:
+                  f.write(content)
+              print(f"{project_gradle} patched with kotlin-gradle-plugin classpath.")
+          else:
+              print(f"{project_gradle} already has kotlin-gradle-plugin, skipping.")
+
+          # ۲) android/app/build.gradle (ماژول app): اعمال پلاگین kotlin-android + وابستگی stdlib
+          app_gradle = "android/app/build.gradle"
+          with open(app_gradle, "r", encoding="utf-8") as f:
+              content = f.read()
+
+          if "kotlin-android" not in content:
+              content = re.sub(
+                  r"(apply plugin:\s*['\"]com\.android\.application['\"]\s*\n)",
+                  r"\1apply plugin: 'kotlin-android'\n",
+                  content,
+                  count=1,
+              )
+              content = re.sub(
+                  r"(dependencies\s*\{)",
+                  r"\1\n    implementation \"org.jetbrains.kotlin:kotlin-stdlib:"
+                  + KOTLIN_VERSION + "\"",
+                  content,
+                  count=1,
+              )
+              with open(app_gradle, "w", encoding="utf-8") as f:
+                  f.write(content)
+              print(f"{app_gradle} patched with kotlin-android plugin + stdlib dependency.")
+          else:
+              print(f"{app_gradle} already has kotlin-android, skipping.")
+          PYEOF
+
       - name: Apply AndroidManifest additions (permissions + receiver)
         run: |
           python3 - <<'PYEOF'
