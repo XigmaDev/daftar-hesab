@@ -181,7 +181,11 @@ jobs:
               print("Plugin already registered, skipping.")
           else:
               is_kotlin = main_activity_path.endswith(".kt")
-              import_line = "import ir.local.daftartarakonesh.SmsReceiverPlugin"
+              import_line = (
+                  "import ir.local.daftartarakonesh.SmsReceiverPlugin"
+                  if is_kotlin
+                  else "import ir.local.daftartarakonesh.SmsReceiverPlugin;"
+              )
               register_line = (
                   "        registerPlugin(SmsReceiverPlugin::class.java)\n"
                   if is_kotlin
