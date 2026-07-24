@@ -5,17 +5,22 @@
   دسترسی را در نسخه‌ی بسته‌بندی‌شده با Capacitor فراهم می‌کند. مسیر پیشنهادی:
       android/app/src/main/java/ir/local/daftartarakonesh/SmsReceiverPlugin.kt
 
-  معماری (چرا دو مکانیزم با هم؟):
-   ۱) SmsBroadcastReceiver.kt (گیرنده‌ی ایستا، در Manifest ثبت می‌شود) — قابل‌اعتماد
-      و حتی وقتی برنامه Kill شده هم کار می‌کند؛ پیامک را در SharedPreferences
-      صف می‌کند. این متد اصلی و ضروری برای دریافت واقعی در پس‌زمینه است.
-   ۲) گیرنده‌ی پویا در همین فایل (registerReceiver در startListening) — فقط زمانی
-      که برنامه باز است، بلافاصله رویداد smsReceived را به‌سمت جاوااسکریپت
-      می‌فرستد تا تجربه‌ی کاربری آنی (Real-time) داشته باشیم. این اختیاری است.
+  معماری (چرا دو مکانیزم با هم، و چرا فقط یکی «منبع واقعی داده» است؟):
+   ۱) SmsBroadcastReceiver.kt (گیرنده‌ی ایستا، در Manifest ثبت می‌شود) — تنها منبع
+      واقعیِ داده. قابل‌اعتماد و حتی وقتی برنامه Kill شده هم کار می‌کند؛ همیشه
+      پیامک را در SharedPreferences صف می‌کند و یک اعلان نشان می‌دهد.
+   ۲) گیرنده‌ی پویا در همین فایل (startForegroundListening) — دیگر خودش پیامک را
+      استخراج نمی‌کند (نسخه‌ی قبلی این کار را می‌کرد و همین باعث می‌شد گاهی
+      اعلان بیاید ولی تراکنش هرگز در کارتابل ثبت نشود — دو مسیر مستقل برای نوشتن
+      در دیتابیس که یکی‌شان بی‌سروصدا شکست می‌خورد). الان این گیرنده فقط یک
+      «زنگ خبر» بی‌محتوا به سمت جاوااسکریپت می‌فرستد تا صفِ SharedPreferences را
+      همان لحظه بخواند — دقیقاً همان صفی که گیرنده‌ی ایستا پر کرده.
 
-   متد getPendingSms صفِ ذخیره‌شده توسط گیرنده‌ی ایستا را می‌خواند، خالی می‌کند و
-   برمی‌گرداند — app.js این متد را در ابتدای اجرا و هر بار که برنامه به foreground
-   برمی‌گردد صدا می‌زند (نگاه کنید به drainPendingNativeSms در js/app.js).
+   متد getPendingSms تنها راهی است که پیامک واقعاً وارد دیتابیس محلی می‌شود؛
+   app.js این متد را در سه حالت صدا می‌زند: در ابتدای اجرا، هر بار برنامه به
+   foreground برمی‌گردد، و با کمی تأخیر بعد از هر «زنگ خبر» (نگاه کنید به
+   drainPendingNativeSms در js/app.js) — یعنی حتی اگر «زنگ خبر» به هر دلیلی
+   نرسد، دیر یا زود (با باز کردن دوباره‌ی برنامه) پیامک از دست نمی‌رود.
 */
 
 package ir.local.daftartarakonesh
@@ -70,26 +75,26 @@ class SmsReceiverPlugin : Plugin() {
         }
     }
 
-    // گیرنده‌ی پویا — فقط برای بروزرسانی آنیِ رابط کاربری وقتی برنامه باز است
+    // گیرنده‌ی پویا — دیگر خودش پیامک را استخراج/ارسال نمی‌کند (این دقیقاً همان چیزی
+    // بود که باعث می‌شد گاهی اعلان بیاید ولی تراکنش ثبت نشود: دو مسیر مستقل برای
+    // نوشتن در دیتابیس، که یکی از آن‌ها بی‌سروصدا شکست می‌خورد). حالا این گیرنده فقط
+    // یک «زنگ خبر» به سمت جاوااسکریپت می‌فرستد تا صفِ SharedPreferences را — که
+    // توسط SmsBroadcastReceiver.kt (تنها منبع واقعی داده) پر شده — همان لحظه بخواند.
     @PluginMethod
     fun startForegroundListening(call: PluginCall? = null) {
         if (dynamicReceiver != null) { call?.resolve(); return }
         dynamicReceiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
-                val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-                if (messages.isNullOrEmpty()) return
-                val sender = messages[0].originatingAddress ?: ""
-                val body = messages.joinToString("") { it.messageBody ?: "" }
-                android.util.Log.d(TAG, "گیرنده‌ی پویا: پیامک آنی از $sender دریافت شد")
-                val payload = JSObject()
-                payload.put("body", body)
-                payload.put("sender", sender)
-                payload.put("receivedAt", System.currentTimeMillis())
-                notifyListeners("smsReceived", payload)
+                android.util.Log.d(TAG, "گیرنده‌ی پویا: broadcast دریافت شد؛ به جاوااسکریپت اطلاع داده می‌شود تا صف را بخواند")
+                notifyListeners("smsReceived", JSObject())
             }
         }
-        context.registerReceiver(dynamicReceiver, IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION))
-        android.util.Log.d(TAG, "گیرنده‌ی پویا ثبت شد")
+        // priority پایین‌تر از گیرنده‌ی ایستا (که در Manifest با priority=999 ثبت شده)
+        // تا مطمئن شویم صف SharedPreferences قبل از این «زنگ خبر» پر شده است
+        val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION)
+        filter.priority = 0
+        context.registerReceiver(dynamicReceiver, filter)
+        android.util.Log.d(TAG, "گیرنده‌ی پویا (زنگ خبر) ثبت شد")
         call?.resolve()
     }
 
