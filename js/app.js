@@ -1334,6 +1334,37 @@ const App = (() => {
   }
 
   /* ---------------- اتصال اختیاری به افزونه بومی دریافت پیامک (فقط داخل بسته Capacitor) ---------------- */
+
+  // یک پیامک خام را پردازش و به‌عنوان تراکنش «جدید» در کارتابل ثبت می‌کند
+  async function ingestRawSms(body) {
+    const parsed = SmsParser.parse(body || '');
+    await DB.add('transactions', {
+      ...parsed, status: 'new', unitId: null, categoryId: null, accountId: null,
+      description: '', tags: [], createdAt: new Date().toISOString(),
+    });
+    const notifEnabled = (await DB.get('settings', 'notifEnabled'))?.value ?? true;
+    if (notifEnabled && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification('تراکنش جدید', { body: `${parsed.bankName} — ${toFa(toman(parsed.amount || 0))} تومان` });
+    }
+    return parsed;
+  }
+
+  // پیامک‌هایی که وقتی برنامه کاملاً بسته بود توسط گیرنده‌ی ایستا (SmsBroadcastReceiver.kt)
+  // در سمت اندروید ذخیره شده‌اند را می‌خواند و به دیتابیس محلی اضافه می‌کند.
+  // باید در ابتدای اجرا و هر بار که برنامه به foreground برمی‌گردد صدا زده شود.
+  async function drainPendingNativeSms() {
+    const plugin = window.Capacitor?.Plugins?.SmsReceiver;
+    if (!plugin || typeof plugin.getPendingSms !== 'function') return;
+    try {
+      const res = await plugin.getPendingSms();
+      const items = res?.items || [];
+      if (!items.length) return;
+      for (const item of items) await ingestRawSms(item.body);
+      toast(`${toFa(items.length)} پیامک بانکی جدید پردازش شد`);
+      router();
+    } catch (e) { /* افزونه در دسترس نیست یا خطای غیرمنتظره */ }
+  }
+
   async function connectNativeSmsIfAvailable() {
     const plugin = window.Capacitor?.Plugins?.SmsReceiver;
     if (!plugin) return; // در نسخه وب PWA این افزونه وجود ندارد؛ کاملاً طبیعی است
@@ -1341,18 +1372,21 @@ const App = (() => {
     if (!enabled) return;
     try {
       await plugin.requestSmsPermission();
+
+      // ۱) هر پیامکی که وقتی برنامه بسته بود دریافت شده، همین الان پردازش شود
+      await drainPendingNativeSms();
+
+      // ۲) برای پیامک‌هایی که از این لحظه به بعد و در حالی که برنامه باز است می‌رسند
       plugin.addListener('smsReceived', async (data) => {
-        const parsed = SmsParser.parse(data.body || '');
-        await DB.add('transactions', {
-          ...parsed, status: 'new', unitId: null, categoryId: null,
-          description: '', tags: [], createdAt: new Date().toISOString(),
-        });
-        const notifEnabled = (await DB.get('settings', 'notifEnabled'))?.value ?? true;
-        if (notifEnabled && 'Notification' in window && Notification.permission === 'granted') {
-          new Notification('تراکنش جدید', { body: `${parsed.bankName} — ${toFa(toman(parsed.amount || 0))} تومان` });
-        }
+        await ingestRawSms(data.body);
         if (location.hash === '#/inbox' || location.hash === '#/dashboard' || location.hash === '') router();
       });
+
+      // ۳) هر بار برنامه از پس‌زمینه به foreground برمی‌گردد هم صف را بررسی کن
+      const appPlugin = window.Capacitor?.Plugins?.App;
+      if (appPlugin?.addListener) {
+        appPlugin.addListener('resume', () => drainPendingNativeSms());
+      }
     } catch (e) { /* کاربر مجوز را رد کرده یا افزونه در دسترس نیست */ }
   }
 

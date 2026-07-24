@@ -9,10 +9,10 @@
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
 <!--
-  داخل تگ <application> این Receiver اضافه شود تا حتی وقتی برنامه در پس‌زمینه است
-  نیز پیامک دریافت شود (Manifest-declared receiver). توجه: از اندروید ۸ به بعد
-  محدودیت‌های Background Broadcast وجود دارد؛ برای پایداری کامل، از Foreground Service
-  یا WorkManager هم می‌توان استفاده کرد که خارج از حوصله‌ی این نمونه است.
+  گیرنده‌ی ایستا (Manifest-declared) — این تنها راه قابل‌اعتماد برای دریافت پیامک
+  در پس‌زمینه، حتی وقتی برنامه به‌طور کامل بسته/Kill شده، است. این تگ را داخل
+  تگ <application> اضافه کنید. کلاس آن باید دقیقاً با SmsBroadcastReceiver.kt
+  مطابقت داشته باشد (که باید در همان پکیج قرار گرفته باشد).
 -->
 <receiver
     android:name="ir.local.daftartarakonesh.SmsBroadcastReceiver"
@@ -22,3 +22,14 @@
         <action android:name="android.provider.Telephony.SMS_RECEIVED" />
     </intent-filter>
 </receiver>
+
+<!--
+  بررسی کنید (خیلی مهم):
+  ۱) فایل SmsBroadcastReceiver.kt واقعاً در مسیر
+     android/app/src/main/java/ir/local/daftartarakonesh/SmsBroadcastReceiver.kt قرار دارد.
+  ۲) applicationId در android/app/build.gradle دقیقاً برابر است با
+     "ir.local.daftartarakonesh" (یا هرچه در capacitor.config.json برای appId
+     گذاشته‌اید) — در غیر این صورت مسیر پکیج بالا را متناسب با آن اصلاح کنید.
+  ۳) بعد از هر تغییر در فایل‌های native، حتماً «Sync Project with Gradle Files»
+     را در Android Studio بزنید، سپس دوباره Build/Run کنید.
+-->

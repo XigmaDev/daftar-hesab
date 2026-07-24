@@ -1,18 +1,21 @@
 /*
-  SmsReceiverPlugin.kt — نمونه افزونه بومی Capacitor برای دریافت خودکار پیامک در اندروید
+  SmsReceiverPlugin.kt — پل ارتباطی بین اندروید و لایه‌ی وب (Capacitor Plugin)
   ------------------------------------------------------------------------------
-  یک PWA به‌تنهایی اجازه دسترسی به پیامک‌های دریافتی را ندارد (محدودیت مرورگر/امنیتی).
-  این فایل یک نمونه مرجع (Reference Implementation) است که باید داخل پروژه‌ی
-  اندرویدِ تولیدشده توسط Capacitor (پوشه android/) قرار گیرد و در Android Studio
-  Build شود. مسیر پیشنهادی:
+  یک PWA به‌تنهایی اجازه‌ی دسترسی به پیامک‌های دریافتی را ندارد؛ این افزونه همان
+  دسترسی را در نسخه‌ی بسته‌بندی‌شده با Capacitor فراهم می‌کند. مسیر پیشنهادی:
       android/app/src/main/java/ir/local/daftartarakonesh/SmsReceiverPlugin.kt
 
-  عملکرد:
-   1) مجوزهای RECEIVE_SMS و READ_SMS را در زمان اجرا درخواست می‌کند.
-   2) با یک BroadcastReceiver به پیامک‌های ورودی گوش می‌دهد.
-   3) متن پیامک را به لایه‌ی وب (index.html / app.js) از طریق رویداد Capacitor
-      با نام "smsReceived" ارسال می‌کند تا SmsParser.js آن را پردازش کند.
-   4) هیچ داده‌ای به خارج از دستگاه ارسال نمی‌شود؛ تمام پردازش در سمت وب/داخل گوشی است.
+  معماری (چرا دو مکانیزم با هم؟):
+   ۱) SmsBroadcastReceiver.kt (گیرنده‌ی ایستا، در Manifest ثبت می‌شود) — قابل‌اعتماد
+      و حتی وقتی برنامه Kill شده هم کار می‌کند؛ پیامک را در SharedPreferences
+      صف می‌کند. این متد اصلی و ضروری برای دریافت واقعی در پس‌زمینه است.
+   ۲) گیرنده‌ی پویا در همین فایل (registerReceiver در startListening) — فقط زمانی
+      که برنامه باز است، بلافاصله رویداد smsReceived را به‌سمت جاوااسکریپت
+      می‌فرستد تا تجربه‌ی کاربری آنی (Real-time) داشته باشیم. این اختیاری است.
+
+   متد getPendingSms صفِ ذخیره‌شده توسط گیرنده‌ی ایستا را می‌خواند، خالی می‌کند و
+   برمی‌گرداند — app.js این متد را در ابتدای اجرا و هر بار که برنامه به foreground
+   برمی‌گردد صدا می‌زند (نگاه کنید به drainPendingNativeSms در js/app.js).
 */
 
 package ir.local.daftartarakonesh
@@ -22,10 +25,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.provider.Telephony
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -33,6 +34,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import org.json.JSONArray
 
 @CapacitorPlugin(
     name = "SmsReceiver",
@@ -42,84 +44,108 @@ import com.getcapacitor.annotation.PermissionCallback
 )
 class SmsReceiverPlugin : Plugin() {
 
-    private var receiver: BroadcastReceiver? = null
+    private var dynamicReceiver: BroadcastReceiver? = null
+    private val TAG = "DaftarSmsPlugin"
 
     @PluginMethod
     fun requestSmsPermission(call: PluginCall) {
+        android.util.Log.d(TAG, "requestSmsPermission فراخوانی شد؛ وضعیت فعلی: ${getPermissionState("sms")}")
         if (getPermissionState("sms") != com.getcapacitor.PermissionState.GRANTED) {
             requestPermissionForAlias("sms", call, "smsPermsCallback")
         } else {
+            startForegroundListening()
             call.resolve()
-            startListening()
         }
     }
 
     @PermissionCallback
-    private fun smsPermsCallback(call: PluginCall) {
-        if (getPermissionState("sms") == com.getcapacitor.PermissionState.GRANTED) {
+    fun smsPermsCallback(call: PluginCall) {
+        val granted = getPermissionState("sms") == com.getcapacitor.PermissionState.GRANTED
+        android.util.Log.d(TAG, "نتیجه‌ی درخواست مجوز: ${if (granted) "تأیید شد" else "رد شد"}")
+        if (granted) {
+            startForegroundListening()
             call.resolve()
-            startListening()
         } else {
             call.reject("کاربر دسترسی پیامک را رد کرد")
         }
     }
 
+    // گیرنده‌ی پویا — فقط برای بروزرسانی آنیِ رابط کاربری وقتی برنامه باز است
     @PluginMethod
-    fun startListening(call: PluginCall? = null) {
-        if (receiver != null) { call?.resolve(); return }
-
-        receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
+    fun startForegroundListening(call: PluginCall? = null) {
+        if (dynamicReceiver != null) { call?.resolve(); return }
+        dynamicReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
                 val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-                for (msg in messages) {
-                    val body = msg.messageBody ?: continue
-                    val sender = msg.originatingAddress ?: ""
-                    val payload = JSObject()
-                    payload.put("body", body)
-                    payload.put("sender", sender)
-                    payload.put("receivedAt", System.currentTimeMillis())
-                    // این رویداد در لایه‌ی وب توسط app.js شنیده می‌شود
-                    notifyListeners("smsReceived", payload)
-                }
+                if (messages.isNullOrEmpty()) return
+                val sender = messages[0].originatingAddress ?: ""
+                val body = messages.joinToString("") { it.messageBody ?: "" }
+                android.util.Log.d(TAG, "گیرنده‌ی پویا: پیامک آنی از $sender دریافت شد")
+                val payload = JSObject()
+                payload.put("body", body)
+                payload.put("sender", sender)
+                payload.put("receivedAt", System.currentTimeMillis())
+                notifyListeners("smsReceived", payload)
             }
         }
-        val filter = IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION)
-        context.registerReceiver(receiver, filter)
+        context.registerReceiver(dynamicReceiver, IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION))
+        android.util.Log.d(TAG, "گیرنده‌ی پویا ثبت شد")
         call?.resolve()
+    }
+
+    // صف پیامک‌هایی که وقتی برنامه بسته بود، توسط گیرنده‌ی ایستا ذخیره شده‌اند
+    @PluginMethod
+    fun getPendingSms(call: PluginCall) {
+        val prefs = context.getSharedPreferences(SmsBroadcastReceiver.PREFS_NAME, Context.MODE_PRIVATE)
+        val json = prefs.getString(SmsBroadcastReceiver.KEY_PENDING_SMS, "[]") ?: "[]"
+        android.util.Log.d(TAG, "getPendingSms فراخوانی شد؛ محتوای خام صف: $json")
+
+        val result = JSObject()
+        try {
+            val arr = JSONArray(json)
+            result.put("items", JSArray(arr.toString()))
+            result.put("count", arr.length())
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "خطا در خواندن صف پیامک", e)
+            result.put("items", JSArray())
+            result.put("count", 0)
+        }
+
+        // صف را خالی می‌کنیم چون قرار است همین الان به لایه‌ی وب تحویل داده شود
+        prefs.edit().putString(SmsBroadcastReceiver.KEY_PENDING_SMS, "[]").apply()
+
+        call.resolve(result)
     }
 
     @PluginMethod
     fun stopListening(call: PluginCall) {
-        receiver?.let { context.unregisterReceiver(it) }
-        receiver = null
+        dynamicReceiver?.let { context.unregisterReceiver(it) }
+        dynamicReceiver = null
         call.resolve()
     }
 
     override fun handleOnDestroy() {
-        receiver?.let { try { context.unregisterReceiver(it) } catch (e: Exception) {} }
+        dynamicReceiver?.let { try { context.unregisterReceiver(it) } catch (e: Exception) {} }
         super.handleOnDestroy()
     }
 }
 
 /*
-  ثبت افزونه — در MainActivity.java/.kt پروژه‌ی Capacitor اضافه کنید:
+  ثبت افزونه — در MainActivity.java پروژه‌ی Capacitor (مسیر:
+  android/app/src/main/java/ir/local/daftartarakonesh/MainActivity.java) اضافه کنید:
 
       import ir.local.daftartarakonesh.SmsReceiverPlugin;
       ...
-      registerPlugin(SmsReceiverPlugin.class);
-
-  و در سمت جاوااسکریپت (مثلاً در ابتدای app.js یا index.html) به‌صورت زیر استفاده کنید:
-
-      if (window.Capacitor?.Plugins?.SmsReceiver) {
-        const { SmsReceiver } = window.Capacitor.Plugins;
-        await SmsReceiver.requestSmsPermission();
-        SmsReceiver.addListener('smsReceived', async (data) => {
-          const parsed = SmsParser.parse(data.body);
-          await DB.add('transactions', {
-            ...parsed, status: 'new', unitId: null, categoryId: null,
-            description: '', tags: [], createdAt: new Date().toISOString(),
-          });
-          // نمایش اعلان محلی (بدون سرور) در صورت فعال بودن در تنظیمات
-        });
+      public class MainActivity extends BridgeActivity {
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
+          registerPlugin(SmsReceiverPlugin.class);
+          super.onCreate(savedInstanceState);
+        }
       }
+
+  نکته‌ی مهم: registerPlugin باید قبل از super.onCreate فراخوانی شود.
+
+  اگر MainActivity.java وجود نداشت (بعضی نسخه‌های Capacitor آن را نمی‌سازند)،
+  آن را داخل همان مسیر با محتوای بالا ایجاد کنید.
 */
