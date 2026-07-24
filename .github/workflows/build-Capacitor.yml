@@ -36,6 +36,77 @@ jobs:
       - name: Install project dependencies
         run: npm install
 
+      - name: 'Fix invalid Capacitor webDir (Capacitor rejects webDir: ".")'
+        # capacitor.config.json در این پروژه webDir را روی "." (ریشه‌ی پروژه)
+        # تنظیم کرده که مقدار نامعتبری است — Capacitor اجازه نمی‌دهد کل ریشه‌ی
+        # پروژه (شامل node_modules, .git و ...) به‌عنوان وب‌روت کپی شود. این
+        # استپ یک پوشه‌ی www می‌سازد، فایل‌های وب را داخلش کپی می‌کند و
+        # capacitor.config.json را طوری پچ می‌کند که webDir به www اشاره کند.
+        # توصیه می‌شود این مشکل به‌صورت دائمی هم در خود ریپو اصلاح شود تا
+        # `npx cap sync` روی سیستم توسعه‌دهنده هم بدون این استپ کار کند.
+        run: |
+          python3 - <<'PYEOF'
+          import json
+          import os
+          import re
+          import shutil
+
+          config_path = None
+          for candidate in ("capacitor.config.json", "capacitor.config.ts"):
+              if os.path.exists(candidate):
+                  config_path = candidate
+                  break
+
+          if config_path is None:
+              raise SystemExit("capacitor.config.json/.ts پیدا نشد.")
+
+          if config_path.endswith(".json"):
+              with open(config_path, "r", encoding="utf-8") as f:
+                  config = json.load(f)
+              web_dir = str(config.get("webDir", "."))
+          else:
+              with open(config_path, "r", encoding="utf-8") as f:
+                  raw = f.read()
+              m = re.search(r'webDir\s*:\s*[\'"]([^\'"]+)[\'"]', raw)
+              web_dir = m.group(1) if m else "."
+
+          print(f"webDir فعلی: '{web_dir}'")
+
+          if web_dir.strip() in (".", "", "./"):
+              target = "www"
+              os.makedirs(target, exist_ok=True)
+              exclude = {
+                  "node_modules", ".git", ".github", "android", "ios",
+                  target, "android-native-sample", ".gradle", "build",
+              }
+              for item in os.listdir("."):
+                  if item in exclude:
+                      continue
+                  src = os.path.join(".", item)
+                  dst = os.path.join(target, item)
+                  if os.path.isdir(src):
+                      shutil.copytree(src, dst, dirs_exist_ok=True)
+                  else:
+                      shutil.copy2(src, dst)
+
+              if config_path.endswith(".json"):
+                  config["webDir"] = target
+                  with open(config_path, "w", encoding="utf-8") as f:
+                      json.dump(config, f, indent=2, ensure_ascii=False)
+              else:
+                  raw = re.sub(
+                      r'(webDir\s*:\s*[\'"])([^\'"]+)([\'"])',
+                      rf'\g<1>{target}\g<3>',
+                      raw,
+                  )
+                  with open(config_path, "w", encoding="utf-8") as f:
+                      f.write(raw)
+
+              print(f"{config_path} پچ شد: webDir -> '{target}'")
+          else:
+              print("webDir معتبر است، تغییری اعمال نشد.")
+          PYEOF
+
       - name: Add Android platform (if not already present)
         run: |
           if [ ! -d "android" ]; then
