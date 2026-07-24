@@ -20,6 +20,17 @@ const Seed = (() => {
     { name: 'دریافت پروژه', color: '#5B8C7B' },
   ];
 
+  const SAMPLE_BANKS = [
+    { name: 'بانک ملت', color: '#114B4F' },
+    { name: 'بانک سامان', color: '#3E7CB1' },
+  ];
+
+  // موجودی اولیه بر حسب تومان (در زمان ذخیره در ۱۰ ضرب می‌شود تا به ریال تبدیل شود)
+  const SAMPLE_ACCOUNTS = [
+    { bankName: 'بانک ملت', title: 'حساب اصلی', accountType: 'checking', cardNumber: '6104-XXXX-XXXX-3321', accountNumber: '1234567890', iban: '', initialBalanceToman: 5000000 },
+    { bankName: 'بانک سامان', title: 'کارت شخصی', accountType: 'card', cardNumber: '6219-XXXX-XXXX-4471', accountNumber: '', iban: '', initialBalanceToman: 1200000 },
+  ];
+
   const SAMPLE_SMS = [
     'بانک ملت\nواریز به مبلغ: 12,500,000 ریال\nحساب: 1234567890\nمانده: 84,300,000 ریال\nتاریخ: 1403/04/12 ساعت 09:14\nپیگیری: 88213045',
     'صادرات\nخرید کارت 6037-****-****-2214\nمبلغ: 450,000 ریال\nمانده: 83,850,000 ریال\n1403/04/13 14:02\nکد پیگیری: 55102938',
@@ -41,6 +52,24 @@ const Seed = (() => {
       catIds[c.name] = await DB.add('categories', c);
     }
 
+    const bankIds = {};
+    for (const b of SAMPLE_BANKS) {
+      bankIds[b.name] = await DB.add('banks', { name: b.name, color: b.color });
+    }
+
+    const accountIds = {};
+    for (const a of SAMPLE_ACCOUNTS) {
+      accountIds[a.title] = await DB.add('accounts', {
+        bankId: bankIds[a.bankName],
+        title: a.title,
+        accountType: a.accountType,
+        cardNumber: a.cardNumber,
+        accountNumber: a.accountNumber,
+        iban: a.iban,
+        initialBalance: a.initialBalanceToman * 10,
+      });
+    }
+
     // چند تراکنش نمونه در کارتابل (بدون دسته‌بندی) + چند تای دسته‌بندی‌شده
     for (const sms of SAMPLE_SMS) {
       const parsed = SmsParser.parse(sms);
@@ -49,13 +78,14 @@ const Seed = (() => {
         status: 'new',
         unitId: null,
         categoryId: null,
+        accountId: null,
         description: '',
         tags: [],
         createdAt: new Date().toISOString(),
       });
     }
 
-    // یک تراکنش دستی نمونه که قبلاً دسته‌بندی شده
+    // یک تراکنش دستی نمونه که قبلاً دسته‌بندی و به یک حساب متصل شده
     await DB.add('transactions', {
       bankName: 'بانک سامان',
       type: 'withdraw',
@@ -64,6 +94,7 @@ const Seed = (() => {
       cardNumber: null,
       accountNumber: null,
       trackingCode: null,
+      accountId: accountIds['کارت شخصی'],
       date: '1403/04/10',
       time: '10:00',
       rawText: '',

@@ -1,18 +1,22 @@
 /*
   smsParser.js — تشخیص و استخراج اطلاعات از متن پیامک‌های بانکی ایرانی
-  چون فرمت پیامک هر بانک متفاوت است، به‌جای یک Regex واحد، از یک موتور
-  «تشخیص بانک + استخراج عمومی» استفاده شده که روی اکثر فرمت‌های رایج جواب می‌دهد.
+  چون فرمت پیامک هر بانک (و حتی هر نسخه از سامانه‌ی پیامکی همان بانک) متفاوت است،
+  این موتور به‌صورت «چند لایه‌ای» عمل می‌کند: چند الگوی Regex به ترتیب اولویت
+  امتحان می‌شوند تا مبلغ، تاریخ، نوع تراکنش و... استخراج شوند.
 */
 
 const SmsParser = (() => {
 
   // فهرست بانک‌ها + کلیدواژه‌هایی که معمولاً در پیامک یا شماره فرستنده دیده می‌شوند
+  // نکته: چون پیامک‌های واقعی گاهی از حروف عربی (ي، ك) به‌جای فارسی (ی، ک) استفاده می‌کنند،
+  // قبل از تشخیص، متن نرمال‌سازی می‌شود؛ پس نیازی به تکرار هر دو حالت در alias نیست.
   const BANKS = [
     { name: 'بانک ملت', aliases: ['ملت', 'mellat', 'behpardakht'] },
-    { name: 'بانک ملی', aliases: ['ملی ایران', 'بام ملی', 'melli', 'sibbank'] },
+    { name: 'بانک ملی ایران', aliases: ['ملی ایران', 'بام ملی', 'ملی', 'melli', 'sibbank'] },
     { name: 'بانک صادرات', aliases: ['صادرات', 'saderat', 'sadad'] },
     { name: 'بانک تجارت', aliases: ['تجارت', 'tejarat'] },
     { name: 'بانک سپه', aliases: ['سپه', 'sepah'] },
+    { name: 'بلو (بانک دیجیتال سپه)', aliases: ['بلو'] },
     { name: 'بانک سامان', aliases: ['سامان', 'saman'] },
     { name: 'بانک پاسارگاد', aliases: ['پاسارگاد', 'pasargad'] },
     { name: 'بانک آینده', aliases: ['آینده', 'ayandeh'] },
@@ -25,7 +29,7 @@ const SmsParser = (() => {
     { name: 'بانک دی', aliases: ['بانک دی', 'dey bank'] },
     { name: 'بانک کارآفرین', aliases: ['کارآفرین', 'karafarin'] },
     { name: 'بانک قرض‌الحسنه رسالت', aliases: ['رسالت', 'resalat'] },
-    { name: 'بانک مهر ایران', aliases: ['مهر ایران', 'قرض الحسنه مهر'] },
+    { name: 'بانک قرض‌الحسنه مهر ایران', aliases: ['مهر ایران', 'قرض الحسنه مهر', 'مهرایران'] },
     { name: 'بانک ایران زمین', aliases: ['ایران زمین', 'iranzamin'] },
     { name: 'بانک گردشگری', aliases: ['گردشگری', 'gardeshgari'] },
     { name: 'بانک مسکن', aliases: ['مسکن', 'maskan', 'بام مسکن'] },
@@ -49,6 +53,13 @@ const SmsParser = (() => {
     });
   }
 
+  // یکسان‌سازی حروف عربی رایج در پیامک‌های بانکی (ي→ی، ك→ک) تا تشخیص بانک/کلیدواژه‌ها
+  // مستقل از سلیقه‌ی سامانه‌ی پیامکی هر بانک کار کند.
+  function normalizeArabic(str) {
+    if (!str) return str;
+    return str.replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/‌/g, '');
+  }
+
   function detectBank(text) {
     const lower = text.toLowerCase();
     for (const bank of BANKS) {
@@ -60,33 +71,42 @@ const SmsParser = (() => {
   }
 
   function detectType(text) {
-    // واریز / برداشت را از کلمات کلیدی رایج در پیامک‌های بانکی تشخیص می‌دهد
-    const depositWords = ['واریز', 'واریزی', 'دریافت وجه', 'افزایش موجودی', 'بستانکار'];
-    const withdrawWords = ['برداشت', 'خرید', 'انتقال', 'کسر', 'بدهکار', 'پرداخت'];
+    const depositWords = ['واریزی', 'واریز', 'دریافت وجه', 'افزایش موجودی', 'بستانکار'];
+    const withdrawWords = ['برداشت', 'خرید', 'انتقال', 'کسر', 'بدهکار', 'پرداخت', 'پرید'];
     for (const w of depositWords) if (text.includes(w)) return 'deposit';
     for (const w of withdrawWords) if (text.includes(w)) return 'withdraw';
     return 'unknown';
   }
 
-  function extractAmount(text) {
-    // مبلغ: 150,000 ریال  یا  مبلغ 20000 تومان  یا  به مبلغ: 1,200,000
+  function detectTypeFromSign(text) {
     const t = toLatinDigits(text);
-    const re = /(?:مبلغ|بمبلغ)\s*[:：]?\s*([\d,۰-۹]+)\s*(ریال|تومان|ريال)?/;
-    const m = t.match(re);
-    if (m) {
-      const raw = m[1].replace(/,/g, '');
-      let amount = parseInt(raw, 10);
-      if (m[2] && m[2].includes('تومان')) amount *= 10; // نمایش یکسان بر حسب ریال داخلی
-      return isNaN(amount) ? null : amount;
-    }
-    // فرمت جایگزین: عددی بزرگ همراه با "ریال" در هر جای متن
-    const re2 = /([\d,]{4,})\s*(ریال|تومان)/;
-    const m2 = t.match(re2);
-    if (m2) {
-      let amount = parseInt(m2[1].replace(/,/g, ''), 10);
-      if (m2[2] === 'تومان') amount *= 10;
-      return isNaN(amount) ? null : amount;
-    }
+    const m = t.match(/[\d,]{3,}\s*([+\-−])(?!\d)/);
+    if (!m) return null;
+    return m[1] === '+' ? 'deposit' : 'withdraw';
+  }
+
+  function applyCurrency(raw, currencyWord) {
+    const amount = parseInt(String(raw).replace(/[,\s]/g, ''), 10);
+    if (isNaN(amount)) return null;
+    if (currencyWord && currencyWord.includes('تومان')) return amount * 10;
+    return amount;
+  }
+
+  function extractAmount(text) {
+    const t = toLatinDigits(text);
+
+    let m = t.match(/(?:مبلغ|بمبلغ)\s*[:：]?\s*([\d,]+)\s*(ریال|تومان|ريال)?/);
+    if (m) return applyCurrency(m[1], m[2]);
+
+    m = t.match(/(?:برداشت|واریزی|واریز)\s*[:：]?\s*([\d,]{3,})/);
+    if (m) return applyCurrency(m[1], null);
+
+    m = t.match(/([\d,]{4,})\s*(ریال|تومان)/);
+    if (m) return applyCurrency(m[1], m[2]);
+
+    m = t.match(/([\d,]{4,})\s*[+\-−](?!\d)/);
+    if (m) return applyCurrency(m[1], null);
+
     return null;
   }
 
@@ -100,32 +120,55 @@ const SmsParser = (() => {
 
   function extractCard(text) {
     const t = toLatinDigits(text);
-    // شماره کارت معمولاً به‌صورت پوشیده نمایش داده می‌شود: 6274-****-****-1234
-    const re = /(\d{4}[-*]{1,}\d{0,4}[-*]{0,}\d{0,4}[-*]{0,}\d{4})/;
+    // شماره کارت همیشه به‌صورت پوشیده (masked) با ستاره نمایش داده می‌شود؛ مثل 6274-****-****-1234
+    // (بدون نیاز به ستاره در متن، شماره حساب‌های خط‌تیره‌دار به‌اشتباه کارت تشخیص داده می‌شدند)
+    const re = /(\d{4}-?\*{2,4}-?\*{2,4}-?\d{4})/;
     const m = t.match(re);
     return m ? m[1] : null;
   }
 
   function extractAccount(text) {
     const t = toLatinDigits(text);
-    const re = /(?:حساب)\s*[:：]?\s*(\d{4,20})/;
+    const re = /(?:حساب)\s*[:：]?\s*([\d\-]{4,30})/;
     const m = t.match(re);
-    return m ? m[1] : null;
+    if (!m) return null;
+    return m[1].replace(/-+$/, '');
   }
 
   function extractTrackingCode(text) {
     const t = toLatinDigits(text);
-    const re = /(?:پیگیری|کد رهگیری|شناسه پیگیری)\s*[:：]?\s*(\d{4,20})/;
+    const re = /(?:پیگیری|کد رهگیری|شناسه پیگیری|مستند)\s*[:：]?\s*(\d{4,20})/;
     const m = t.match(re);
     return m ? m[1] : null;
   }
 
   function extractDate(text) {
     const t = toLatinDigits(text);
-    // فرمت‌های رایج: 1403/05/12 یا 12/05/1403 یا 1403-05-12
-    const re = /(\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,4})/;
-    const m = t.match(re);
-    return m ? m[1] : null;
+
+    // ۰) اگر پس از کلمه‌ی «تاریخ» یا «زمان» یک تاریخ آمده، همیشه اولویت با همان است
+    let m = t.match(/(?:تاریخ|زمان)\s*[:：]?\s*(\d{2,4}[\/\-.]\d{1,2}[\/\-.]\d{1,4})/);
+    if (m) return m[1];
+
+    // ۱) در میان همه‌ی الگوهای «کامل» موجود در متن، آن‌که گروه اول‌اش به سال شمسی
+    // شبیه‌تر است (۱۳xx یا ۱۴xx) در اولویت است — این از قاطی‌شدن با شماره‌حساب‌های
+    // خط‌تیره‌دار (مثل 3605-10-5330227) جلوگیری می‌کند.
+    const fullMatches = [...t.matchAll(/(\d{2,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})/g)];
+    const yearLike = fullMatches.find((mm) => {
+      const y = parseInt(mm[1], 10);
+      return y >= 1300 && y <= 1500;
+    });
+    if (yearLike) return yearLike[0];
+    if (fullMatches.length) return fullMatches[0][0];
+
+    // ۲) فرمت کوتاه بدون سال — مثل 1/4 (روز/ماه)
+    m = t.match(/\b(\d{1,2}\/\d{1,2})(?=[\s\-]|$)/);
+    if (m) return m[1];
+
+    // ۳) فرمت فشرده بدون هیچ جداکننده‌ای، بلافاصله قبل از ساعت — مثل 1128-23:58
+    m = t.match(/\b(\d{3,4})\s*-\s*\d{1,2}:\d{2}/);
+    if (m) return m[1];
+
+    return null;
   }
 
   function extractTime(text) {
@@ -135,13 +178,16 @@ const SmsParser = (() => {
     return m ? m[1] : null;
   }
 
-  /**
-   * تابع اصلی: یک متن پیامک را گرفته و یک آبجکت تراکنش استخراج‌شده برمی‌گرداند.
-   */
   function parse(rawText) {
-    const text = (rawText || '').trim();
+    const original = (rawText || '').trim();
+    const text = normalizeArabic(original);
+
     const bankName = detectBank(text);
-    const type = detectType(text);
+    let type = detectType(text);
+    if (type === 'unknown') {
+      const signType = detectTypeFromSign(text);
+      if (signType) type = signType;
+    }
     const amount = extractAmount(text);
     const balanceAfter = extractBalance(text);
     const cardNumber = extractCard(text);
@@ -152,18 +198,20 @@ const SmsParser = (() => {
 
     return {
       bankName: bankName || 'نامشخص',
-      type,                 // 'deposit' | 'withdraw' | 'unknown'
-      amount,                // به ریال
+      type,
+      amount,
       balanceAfter,
       cardNumber,
       accountNumber,
       trackingCode,
       date,
       time,
-      rawText: text,
+      rawText: original,
       recognized: Boolean(bankName && amount !== null),
     };
   }
 
-  return { parse, detectBank, detectType, extractAmount, toLatinDigits, BANKS };
+  return { parse, detectBank, detectType, extractAmount, toLatinDigits, normalizeArabic, BANKS };
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = SmsParser;

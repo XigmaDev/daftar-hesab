@@ -12,6 +12,8 @@ const App = (() => {
     selectedIds: new Set(),
     unitsCache: [],
     categoriesCache: [],
+    banksCache: [],
+    accountsCache: [],
   };
 
   /* ---------------- ابزارهای کمکی ---------------- */
@@ -72,6 +74,7 @@ const App = (() => {
     layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
     tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/><circle cx="7" cy="7" r="1"/></svg>',
     bank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 21 8 3 8"/></svg>',
+    card: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
     backup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
     theme: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
@@ -86,10 +89,23 @@ const App = (() => {
   async function refreshLookups() {
     STATE.unitsCache = await DB.getAll('units');
     STATE.categoriesCache = await DB.getAll('categories');
+    STATE.banksCache = await DB.getAll('banks');
+    STATE.accountsCache = await DB.getAll('accounts');
   }
   const unitName = (id) => STATE.unitsCache.find((u) => u.id === id)?.name || null;
   const catName = (id) => STATE.categoriesCache.find((c) => c.id === id)?.name || null;
   const catColor = (id) => STATE.categoriesCache.find((c) => c.id === id)?.color || 'var(--primary)';
+  const bankOf = (id) => STATE.banksCache.find((b) => b.id === id) || null;
+  const accountOf = (id) => STATE.accountsCache.find((a) => a.id === id) || null;
+
+  // موجودی فعلی هر حساب = موجودی اولیه + مجموع واریزها − مجموع برداشت‌های ثبت‌شده روی همان حساب
+  function accountBalance(accountId, allTx) {
+    const acc = accountOf(accountId);
+    if (!acc) return 0;
+    const related = allTx.filter((t) => t.accountId === accountId);
+    const delta = related.reduce((s, t) => s + (t.type === 'deposit' ? (t.amount || 0) : t.type === 'withdraw' ? -(t.amount || 0) : 0), 0);
+    return (acc.initialBalance || 0) + delta;
+  }
 
   /* ---------------- محاسبه بازه زمانی ---------------- */
   function periodRange(period) {
@@ -120,6 +136,7 @@ const App = (() => {
     '/reports': renderReports,
     '/units': renderUnits,
     '/categories': renderCategories,
+    '/banks': renderBanks,
     '/settings': renderSettings,
     '/backup': renderBackup,
   };
@@ -207,6 +224,12 @@ const App = (() => {
     const lastBalance = [...all].reverse().find((t) => t.balanceAfter)?.balanceAfter;
     const newCount = all.filter((t) => t.status === 'new').length;
 
+    const accounts = STATE.accountsCache;
+    const hasAccounts = accounts.length > 0;
+    const totalAccountsBalance = accounts.reduce((s, a) => s + accountBalance(a.id, all), 0);
+    const heroBalance = hasAccounts ? totalAccountsBalance : lastBalance;
+    const heroLabel = hasAccounts ? 'مجموع موجودی همه حساب‌ها' : 'آخرین موجودی ثبت‌شده';
+
     const periods = [['today', 'امروز'], ['week', 'این هفته'], ['month', 'این ماه'], ['year', 'امسال'], ['all', 'کل بازه']];
 
     // داده روند ۷ روز اخیر برای نمودار خطی
@@ -236,8 +259,8 @@ const App = (() => {
     mountPage(`
       ${topbar('داشبورد', { subtitle: 'دفتر تراکنش · کاملاً آفلاین' })}
       <div class="balance-hero">
-        <div class="label">آخرین موجودی ثبت‌شده</div>
-        <div class="amount">${lastBalance ? toFa(toman(lastBalance)) : '—'} <small>تومان</small></div>
+        <div class="label">${heroLabel}</div>
+        <div class="amount">${heroBalance ? toFa(toman(heroBalance)) : '—'} <small>تومان</small></div>
         <div class="row">
           <div class="stat deposit"><div class="k">واریز (${periods.find((p) => p[0] === STATE.period)[1]})</div><div class="v">${toFa(toman(deposit))}</div></div>
           <div class="stat withdraw"><div class="k">برداشت (${periods.find((p) => p[0] === STATE.period)[1]})</div><div class="v">${toFa(toman(withdraw))}</div></div>
@@ -252,6 +275,22 @@ const App = (() => {
         <div class="stat-card"><div class="k">تعداد تراکنش‌ها</div><div class="v">${toFa(filtered.length)}</div></div>
         <div class="stat-card"><div class="k">در انتظار بررسی</div><div class="v">${toFa(newCount)}</div></div>
       </div>
+
+      <div class="section-title"><h2>موجودی هر حساب</h2><span class="link" id="go-banks">مدیریت بانک‌ها</span></div>
+      ${hasAccounts ? `
+      <div class="tx-list">
+        ${accounts.map((a) => {
+          const bank = bankOf(a.bankId);
+          const bal = accountBalance(a.id, all);
+          return `<div class="tx-item" data-account-nav="${a.id}">
+            <div class="avatar" style="background:${bank?.color || 'var(--primary)'}">${(bank?.name || '؟').replace('بانک ', '').slice(0, 1)}</div>
+            <div class="info">
+              <div class="top"><span class="bank">${escapeHtml(bank?.name || 'نامشخص')}</span><span class="amount ${bal >= 0 ? 'deposit' : 'withdraw'}">${toFa(toman(bal))} <small style="font-size:10px;">تومان</small></span></div>
+              <div class="meta"><span>${escapeHtml(a.title || 'حساب بدون عنوان')}${a.cardNumber ? ` · ${escapeHtml(a.cardNumber)}` : ''}</span></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : `<div class="card"><p class="text-muted" style="font-size:12.5px; line-height:1.9;">هنوز بانک یا حسابی اضافه نکرده‌اید. با افزودن بانک و حساب همراه موجودی اولیه، موجودی هر حساب و مجموع دارایی‌ها اینجا محاسبه می‌شود.</p></div>`}
 
       <div class="section-title"><h2>روند ورود و خروج (۷ روز اخیر)</h2></div>
       <div class="card"><div id="line-chart"></div></div>
@@ -273,6 +312,8 @@ const App = (() => {
     document.querySelectorAll('.period-tabs button').forEach((b) => b.onclick = () => { STATE.period = b.dataset.period; renderDashboard(); });
     document.getElementById('go-reports').onclick = () => location.hash = '#/reports';
     document.getElementById('go-tx').onclick = () => location.hash = '#/transactions';
+    document.getElementById('go-banks').onclick = () => location.hash = '#/banks';
+    document.querySelectorAll('[data-account-nav]').forEach((el) => el.onclick = () => location.hash = '#/banks');
     bindTxItemClicks();
   }
 
@@ -403,10 +444,122 @@ const App = (() => {
         ${sorted.length ? sorted.map(txItemHtml).join('') : emptyInlineHtml('کارتابل خالی است', 'وقتی پیامک بانکی جدیدی دریافت یا ثبت شود، اینجا نمایش داده می‌شود.')}
       </div>
     `);
-    bindTxItemClicks();
+    bindInboxItemClicks();
   }
 
-  /* ================= لیست تراکنش‌ها ================= */
+  function bindInboxItemClicks() {
+    document.querySelectorAll('.tx-item[data-id]').forEach((el) => {
+      el.addEventListener('click', () => {
+        if (STATE.selectMode) { toggleSelect(el, Number(el.dataset.id)); return; }
+        quickCategorizeSheet(Number(el.dataset.id));
+      });
+      let pressTimer;
+      el.addEventListener('touchstart', () => { pressTimer = setTimeout(() => enterSelectMode(el, Number(el.dataset.id)), 480); });
+      el.addEventListener('touchend', () => clearTimeout(pressTimer));
+    });
+  }
+
+  /* شیت «دسته‌بندی سریع» — سریع‌ترین مسیر برای مشخص‌کردن واحد/دسته‌بندی یک تراکنش
+     در کارتابل و ثبت آن، بدون نیاز به باز کردن فرم کامل ویرایش. */
+  async function quickCategorizeSheet(id) {
+    const t = await DB.get('transactions', id);
+    if (!t) return;
+    const isDeposit = t.type === 'deposit';
+    let selUnit = t.unitId || null;
+    let selCat = t.categoryId || null;
+
+    function unitsChipsHtml() {
+      return STATE.unitsCache.map((u) => `<button type="button" class="chip-select ${selUnit === u.id ? 'active' : ''}" data-id="${u.id}">${escapeHtml(u.name)}</button>`).join('')
+        + `<button type="button" class="chip-select" id="qc-add-unit">${ICON.plus} جدید</button>`;
+    }
+    function catsChipsHtml() {
+      return STATE.categoriesCache.map((c) => `<button type="button" class="chip-select ${selCat === c.id ? 'active' : ''}" data-id="${c.id}">${escapeHtml(c.name)}</button>`).join('')
+        + `<button type="button" class="chip-select" id="qc-add-cat">${ICON.plus} جدید</button>`;
+    }
+    function addRowHtml(placeholder, saveId, inputId) {
+      return `<div style="display:flex; gap:8px; margin-top:8px;">
+        <input id="${inputId}" placeholder="${placeholder}" style="flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px;" />
+        <button class="btn btn-primary" id="${saveId}" style="width:auto; padding:10px 16px;">افزودن</button>
+      </div>`;
+    }
+
+    const sheet = openSheet(`
+      <h3>دسته‌بندی سریع</h3>
+      <div class="detail-amount" style="padding:4px 0 14px;">
+        <div class="v ${isDeposit ? 'deposit' : 'withdraw'}" style="font-size:22px;">${isDeposit ? '+' : '−'} ${money(t.amount)}</div>
+        <div class="bank-name">${escapeHtml(t.bankName || 'نامشخص')}${t.date ? ' · ' + escapeHtml(t.date) : ''}</div>
+      </div>
+      <div class="field">
+        <label>واحد</label>
+        <div class="chip-row" id="qc-units">${unitsChipsHtml()}</div>
+        <div id="qc-unit-add-box"></div>
+      </div>
+      <div class="field">
+        <label>دسته‌بندی</label>
+        <div class="chip-row" id="qc-cats">${catsChipsHtml()}</div>
+        <div id="qc-cat-add-box"></div>
+      </div>
+      <button class="btn btn-primary" id="qc-submit">${ICON.check} ثبت و انتقال به تراکنش‌ها</button>
+      <button class="btn btn-ghost mt-8" id="qc-full-edit">ویرایش کامل تراکنش</button>
+    `);
+
+    function bindUnitChips() {
+      sheet.querySelectorAll('#qc-units [data-id]').forEach((b) => b.onclick = () => {
+        selUnit = (selUnit === Number(b.dataset.id)) ? null : Number(b.dataset.id);
+        sheet.querySelectorAll('#qc-units [data-id]').forEach((x) => x.classList.toggle('active', Number(x.dataset.id) === selUnit));
+      });
+      sheet.querySelector('#qc-add-unit').onclick = () => {
+        sheet.querySelector('#qc-unit-add-box').innerHTML = addRowHtml('نام واحد جدید', 'qc-new-unit-save', 'qc-new-unit-name');
+        sheet.querySelector('#qc-new-unit-name').focus();
+        sheet.querySelector('#qc-new-unit-save').onclick = async () => {
+          const name = sheet.querySelector('#qc-new-unit-name').value.trim();
+          if (!name) return;
+          const newId = await DB.add('units', { name, color: PALETTE[STATE.unitsCache.length % PALETTE.length] });
+          STATE.unitsCache = await DB.getAll('units');
+          selUnit = newId;
+          sheet.querySelector('#qc-units').innerHTML = unitsChipsHtml();
+          sheet.querySelector('#qc-unit-add-box').innerHTML = '';
+          bindUnitChips();
+        };
+      };
+    }
+    function bindCatChips() {
+      sheet.querySelectorAll('#qc-cats [data-id]').forEach((b) => b.onclick = () => {
+        selCat = (selCat === Number(b.dataset.id)) ? null : Number(b.dataset.id);
+        sheet.querySelectorAll('#qc-cats [data-id]').forEach((x) => x.classList.toggle('active', Number(x.dataset.id) === selCat));
+      });
+      sheet.querySelector('#qc-add-cat').onclick = () => {
+        sheet.querySelector('#qc-cat-add-box').innerHTML = addRowHtml('نام دسته‌بندی جدید', 'qc-new-cat-save', 'qc-new-cat-name');
+        sheet.querySelector('#qc-new-cat-name').focus();
+        sheet.querySelector('#qc-new-cat-save').onclick = async () => {
+          const name = sheet.querySelector('#qc-new-cat-name').value.trim();
+          if (!name) return;
+          const newId = await DB.add('categories', { name, color: PALETTE[(STATE.categoriesCache.length + 1) % PALETTE.length], unitId: null });
+          STATE.categoriesCache = await DB.getAll('categories');
+          selCat = newId;
+          sheet.querySelector('#qc-cats').innerHTML = catsChipsHtml();
+          sheet.querySelector('#qc-cat-add-box').innerHTML = '';
+          bindCatChips();
+        };
+      };
+    }
+    bindUnitChips();
+    bindCatChips();
+
+    sheet.querySelector('#qc-submit').onclick = async () => {
+      t.unitId = selUnit;
+      t.categoryId = selCat;
+      t.status = 'reviewed';
+      await DB.put('transactions', t);
+      closeSheet();
+      toast('تراکنش ثبت و دسته‌بندی شد');
+      router();
+    };
+    sheet.querySelector('#qc-full-edit').onclick = () => {
+      closeSheet();
+      location.hash = `#/transactions/${t.id}`;
+    };
+  }
   async function renderTransactions() {
     let all = await DB.getAll('transactions');
     all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -498,6 +651,7 @@ const App = (() => {
           <div class="kv-row"><span class="k">تاریخ ثبت در برنامه</span><span class="v">${new Date(t.createdAt).toLocaleString('fa-IR')}</span></div>
           <div class="kv-row"><span class="k">واحد</span><span class="v">${escapeHtml(unitName(t.unitId) || '—')}</span></div>
           <div class="kv-row"><span class="k">دسته‌بندی</span><span class="v">${escapeHtml(catName(t.categoryId) || '—')}</span></div>
+          <div class="kv-row"><span class="k">حساب متصل</span><span class="v">${t.accountId && accountOf(t.accountId) ? escapeHtml(accountOf(t.accountId).title || 'حساب') : '—'}</span></div>
         </div>
       </div>
 
@@ -554,6 +708,17 @@ const App = (() => {
           <input list="bank-list" id="f-bank" value="${escapeHtml(existing?.bankName || '')}" placeholder="مثلاً بانک ملت" />
           <datalist id="bank-list">${SmsParser.BANKS.map((b) => `<option value="${b.name}">`).join('')}</datalist>
         </div>
+        <div class="field"><label>حساب/کارت (اختیاری)</label>
+          <select id="f-account">
+            <option value="">— بدون اتصال به حساب مشخص —</option>
+            ${STATE.accountsCache.map((a) => {
+              const b = bankOf(a.bankId);
+              const label = `${b ? b.name : 'نامشخص'} — ${a.title || 'حساب'}${a.cardNumber ? ' · ' + a.cardNumber : ''}`;
+              return `<option value="${a.id}" ${existing?.accountId === a.id ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+            }).join('')}
+          </select>
+          ${STATE.accountsCache.length === 0 ? `<p class="text-muted mt-8" style="font-size:11px;">هنوز حسابی اضافه نکرده‌اید؛ از تنظیمات ← بانک‌ها و حساب‌ها می‌توانید اضافه کنید.</p>` : ''}
+        </div>
         <div class="field"><label>مبلغ (تومان)</label>
           <input type="number" id="f-amount" inputmode="numeric" value="${existing ? toman(existing.amount) : ''}" placeholder="0" />
         </div>
@@ -586,6 +751,11 @@ const App = (() => {
       b.classList.add('active', currentType);
     });
 
+    document.getElementById('f-account').onchange = (e) => {
+      const acc = accountOf(Number(e.target.value));
+      if (acc) document.getElementById('f-bank').value = bankOf(acc.bankId)?.name || document.getElementById('f-bank').value;
+    };
+
     if (!isEdit) {
       document.querySelectorAll('#mode-switch button').forEach((b) => b.onclick = () => {
         mode = b.dataset.mode;
@@ -609,6 +779,14 @@ const App = (() => {
             x.classList.toggle(parsed.type, x.dataset.type === parsed.type);
           });
         }
+        const matchedAccount = STATE.accountsCache.find((a) =>
+          (parsed.cardNumber && a.cardNumber && a.cardNumber.replace(/[^\d]/g, '').slice(-4) === parsed.cardNumber.replace(/[^\d]/g, '').slice(-4)) ||
+          (parsed.accountNumber && a.accountNumber && a.accountNumber === parsed.accountNumber)
+        );
+        if (matchedAccount) {
+          document.getElementById('f-account').value = matchedAccount.id;
+          document.getElementById('f-bank').value = bankOf(matchedAccount.bankId)?.name || document.getElementById('f-bank').value;
+        }
         toast(parsed.recognized ? 'اطلاعات با موفقیت استخراج شد' : 'برخی اطلاعات پیدا نشد؛ لطفاً دستی تکمیل کنید');
       };
     }
@@ -629,6 +807,7 @@ const App = (() => {
         cardNumber: existing?.cardNumber || null,
         accountNumber: existing?.accountNumber || null,
         trackingCode: existing?.trackingCode || null,
+        accountId: Number(document.getElementById('f-account').value) || null,
         date: document.getElementById('f-date').value.trim() || new Date().toLocaleDateString('fa-IR'),
         time: document.getElementById('f-time').value.trim(),
         rawText: existing?.rawText || (mode === 'sms' ? document.getElementById('sms-text')?.value.trim() : ''),
@@ -853,6 +1032,173 @@ const App = (() => {
     };
   }
 
+  /* ================= مدیریت بانک‌ها و حساب‌ها ================= */
+  async function renderBanks() {
+    const banks = STATE.banksCache;
+    const accounts = STATE.accountsCache;
+    const allTx = await DB.getAll('transactions');
+
+    const totalBalance = accounts.reduce((s, a) => s + accountBalance(a.id, allTx), 0);
+
+    mountPage(`
+      ${topbar('بانک‌ها و حساب‌ها', { back: true, subtitle: `${toFa(banks.length)} بانک · ${toFa(accounts.length)} حساب/کارت` })}
+
+      <div class="balance-hero">
+        <div class="label">مجموع موجودی همه حساب‌ها</div>
+        <div class="amount">${toFa(toman(totalBalance))} <small>تومان</small></div>
+      </div>
+
+      <div class="section-title"><h2>بانک‌های شما</h2></div>
+      <div id="banks-list">
+        ${banks.length ? banks.map((b) => bankCardHtml(b, accounts.filter((a) => a.bankId === b.id), allTx)).join('') : emptyInlineHtml('هنوز بانکی اضافه نشده', 'با دکمه‌ی زیر، اولین بانک و حساب/کارت خود را اضافه کنید.')}
+      </div>
+
+      <button class="btn btn-primary mt-24" id="add-bank">${ICON.plus} افزودن بانک جدید</button>
+    `);
+
+    document.getElementById('add-bank').onclick = () => bankEditorSheet();
+    bindBankCardEvents();
+  }
+
+  function bankCardHtml(bank, bankAccounts, allTx) {
+    const bankTotal = bankAccounts.reduce((s, a) => s + accountBalance(a.id, allTx), 0);
+    return `
+      <div class="card" data-bank-id="${bank.id}" style="margin-bottom:12px;">
+        <div class="settings-row" style="padding-top:0;">
+          <div class="ic" style="background:${bank.color}22; color:${bank.color}">${ICON.bank}</div>
+          <div class="txt">
+            <div class="t">${escapeHtml(bank.name)}</div>
+            <div class="d">${bankAccounts.length ? `${toFa(bankAccounts.length)} حساب/کارت — مجموع ${toFa(toman(bankTotal))} تومان` : 'بدون حساب ثبت‌شده'}</div>
+          </div>
+          <button class="icon-btn btn-edit-bank" data-id="${bank.id}">${ICON.edit}</button>
+          <button class="icon-btn btn-del-bank" data-id="${bank.id}">${ICON.trash}</button>
+        </div>
+        ${bankAccounts.length ? `
+        <div class="kv-list mt-8">
+          ${bankAccounts.map((a) => `
+            <div class="kv-row" data-account-id="${a.id}" style="align-items:center; cursor:pointer;">
+              <span class="k" style="display:flex; align-items:center; gap:8px;">${ICON.card}
+                <span>${escapeHtml(a.title || 'حساب بدون عنوان')}${a.cardNumber ? ` · ${escapeHtml(a.cardNumber)}` : ''}</span>
+              </span>
+              <span class="v">${toFa(toman(accountBalance(a.id, allTx)))} تومان</span>
+            </div>
+          `).join('')}
+        </div>` : ''}
+        <button class="btn btn-outline mt-8 btn-add-account" data-bank-id="${bank.id}">${ICON.plus} افزودن حساب/کارت به این بانک</button>
+      </div>
+    `;
+  }
+
+  function bindBankCardEvents() {
+    document.querySelectorAll('.btn-edit-bank').forEach((b) => b.onclick = async (e) => { e.stopPropagation(); bankEditorSheet(await DB.get('banks', Number(b.dataset.id))); });
+    document.querySelectorAll('.btn-del-bank').forEach((b) => b.onclick = async (e) => {
+      e.stopPropagation();
+      const relatedAccounts = STATE.accountsCache.filter((a) => a.bankId === Number(b.dataset.id));
+      const msg = relatedAccounts.length
+        ? `این بانک ${toFa(relatedAccounts.length)} حساب/کارت ثبت‌شده دارد. با حذف بانک، حساب‌های آن نیز حذف می‌شوند (تراکنش‌های مرتبط باقی می‌مانند ولی بدون حساب). ادامه می‌دهید؟`
+        : 'این بانک حذف شود؟';
+      const ok = await confirmDialog(msg);
+      if (!ok) return;
+      for (const acc of relatedAccounts) await DB.del('accounts', acc.id);
+      await DB.del('banks', Number(b.dataset.id));
+      toast('حذف شد'); router();
+    });
+    document.querySelectorAll('.btn-add-account').forEach((b) => b.onclick = (e) => { e.stopPropagation(); accountEditorSheet(null, Number(b.dataset.bankId)); });
+    document.querySelectorAll('[data-account-id]').forEach((row) => row.onclick = async () => {
+      const acc = await DB.get('accounts', Number(row.dataset.accountId));
+      accountEditorSheet(acc, acc.bankId);
+    });
+  }
+
+  function bankEditorSheet(existing) {
+    const sheet = openSheet(`
+      <h3>${existing ? 'ویرایش بانک' : 'افزودن بانک جدید'}</h3>
+      <div class="field"><label>نام بانک</label>
+        <input list="bank-known-list" id="bk-name" value="${escapeHtml(existing?.name || '')}" placeholder="مثلاً بانک ملت، یا نام بانک/موسسه دلخواه" />
+        <datalist id="bank-known-list">${SmsParser.BANKS.map((b) => `<option value="${b.name}">`).join('')}</datalist>
+      </div>
+      <div class="field"><label>رنگ اختصاصی</label><div class="color-dot-list" id="bk-colors">${PALETTE.map((c) => `<span class="color-dot ${existing?.color === c ? 'active' : ''}" style="background:${c}" data-color="${c}"></span>`).join('')}</div></div>
+      <button class="btn btn-primary" id="bk-save">ذخیره بانک</button>
+      ${existing ? '' : '<p class="text-muted mt-8" style="font-size:11.5px; line-height:1.9;">بعد از ذخیره‌ی بانک، می‌توانید حساب یا کارت آن را به‌همراه موجودی اولیه اضافه کنید.</p>'}
+    `);
+    let color = existing?.color || PALETTE[STATE.banksCache.length % PALETTE.length];
+    sheet.querySelectorAll('.color-dot').forEach((d) => d.onclick = () => { color = d.dataset.color; sheet.querySelectorAll('.color-dot').forEach((x) => x.classList.remove('active')); d.classList.add('active'); });
+    sheet.querySelector('#bk-save').onclick = async () => {
+      const name = sheet.querySelector('#bk-name').value.trim();
+      if (!name) return toast('نام بانک را وارد کنید');
+      let bankId;
+      if (existing) { await DB.put('banks', { ...existing, name, color }); bankId = existing.id; }
+      else { bankId = await DB.add('banks', { name, color }); }
+      closeSheet(); toast('بانک ذخیره شد');
+      await refreshLookups();
+      if (!existing) accountEditorSheet(null, bankId);
+      else router();
+    };
+  }
+
+  const ACCOUNT_TYPES = [
+    ['checking', 'حساب جاری'],
+    ['savings', 'حساب پس‌انداز'],
+    ['card', 'کارت بانکی'],
+    ['currency', 'حساب ارزی'],
+  ];
+
+  function accountEditorSheet(existing, bankId) {
+    const bank = bankOf(bankId);
+    const sheet = openSheet(`
+      <h3>${existing ? 'ویرایش حساب/کارت' : 'افزودن حساب/کارت جدید'}</h3>
+      ${bank ? `<p class="text-muted mt-8" style="font-size:12px; margin-bottom:10px;">بانک: <b style="color:var(--text)">${escapeHtml(bank.name)}</b></p>` : ''}
+      <div class="field"><label>عنوان حساب (اختیاری)</label>
+        <input id="ac-title" value="${escapeHtml(existing?.title || '')}" placeholder="مثلاً حساب اصلی، کارت درآمد پروژه..." />
+      </div>
+      <div class="field"><label>نوع حساب</label>
+        <select id="ac-type">${ACCOUNT_TYPES.map(([v, l]) => `<option value="${v}" ${existing?.accountType === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>شماره کارت</label>
+        <input id="ac-card" value="${escapeHtml(existing?.cardNumber || '')}" placeholder="مثلاً 6274-XXXX-XXXX-1234" />
+      </div>
+      <div class="field"><label>شماره حساب</label>
+        <input id="ac-account" value="${escapeHtml(existing?.accountNumber || '')}" placeholder="شماره حساب بانکی" />
+      </div>
+      <div class="field"><label>شماره شبا (IBAN)</label>
+        <input id="ac-iban" value="${escapeHtml(existing?.iban || '')}" placeholder="IR..." />
+      </div>
+      <div class="field"><label>موجودی اولیه (تومان)</label>
+        <input type="number" id="ac-balance" inputmode="numeric" value="${existing ? toman(existing.initialBalance) : ''}" placeholder="0" />
+        <p class="text-muted" style="font-size:11px; margin-top:6px; line-height:1.8;">موجودی فعلی این حساب = موجودی اولیه + مجموع تراکنش‌هایی که به این حساب متصل کنید.</p>
+      </div>
+      <div class="btn-row">
+        ${existing ? `<button type="button" class="btn btn-danger" id="ac-delete">${ICON.trash} حذف حساب</button>` : ''}
+        <button type="button" class="btn btn-primary" id="ac-save">ذخیره حساب</button>
+      </div>
+    `);
+    sheet.querySelector('#ac-save').onclick = async () => {
+      const title = sheet.querySelector('#ac-title').value.trim();
+      const accountType = sheet.querySelector('#ac-type').value;
+      const cardNumber = sheet.querySelector('#ac-card').value.trim();
+      const accountNumber = sheet.querySelector('#ac-account').value.trim();
+      const iban = sheet.querySelector('#ac-iban').value.trim();
+      const initialBalanceToman = Number(sheet.querySelector('#ac-balance').value) || 0;
+      const record = {
+        bankId, title, accountType, cardNumber, accountNumber, iban,
+        initialBalance: initialBalanceToman * 10,
+      };
+      if (existing) await DB.put('accounts', { ...existing, ...record });
+      else await DB.add('accounts', record);
+      closeSheet(); toast('حساب ذخیره شد');
+      await refreshLookups(); router();
+    };
+    if (existing) {
+      sheet.querySelector('#ac-delete').onclick = async () => {
+        const ok = await confirmDialog('این حساب حذف شود؟ تراکنش‌های مرتبط بدون حساب باقی می‌مانند.');
+        if (!ok) return;
+        await DB.del('accounts', existing.id);
+        closeSheet(); toast('حساب حذف شد');
+        await refreshLookups(); router();
+      };
+    }
+  }
+
   /* ================= تنظیمات ================= */
   async function renderSettings() {
     const smsEnabled = (await DB.get('settings', 'smsEnabled'))?.value ?? true;
@@ -887,6 +1233,7 @@ const App = (() => {
 
       <div class="section-title"><h2>مدیریت داده</h2></div>
       <div class="card">
+        <div class="settings-row" id="row-banks"><div class="ic">${ICON.bank}</div><div class="txt"><div class="t">بانک‌ها و حساب‌ها</div><div class="d">افزودن بانک، کارت/حساب و موجودی اولیه</div></div><button class="icon-btn">${ICON.chevronL}</button></div>
         <div class="settings-row" id="row-units"><div class="ic">${ICON.layers}</div><div class="txt"><div class="t">مدیریت واحدها</div></div><button class="icon-btn">${ICON.chevronL}</button></div>
         <div class="settings-row" id="row-cats"><div class="ic">${ICON.tag}</div><div class="txt"><div class="t">مدیریت دسته‌بندی‌ها</div></div><button class="icon-btn">${ICON.chevronL}</button></div>
         <div class="settings-row" id="row-backup"><div class="ic">${ICON.backup}</div><div class="txt"><div class="t">پشتیبان‌گیری و بازیابی</div></div><button class="icon-btn">${ICON.chevronL}</button></div>
@@ -909,6 +1256,7 @@ const App = (() => {
       DB.put('settings', { key: 'theme', value: t });
     };
     document.getElementById('btn-pin').onclick = () => pinSetupSheet(pinSet);
+    document.getElementById('row-banks').onclick = () => location.hash = '#/banks';
     document.getElementById('row-units').onclick = () => location.hash = '#/units';
     document.getElementById('row-cats').onclick = () => location.hash = '#/categories';
     document.getElementById('row-backup').onclick = () => location.hash = '#/backup';
