@@ -1244,6 +1244,16 @@ const App = (() => {
         <div class="settings-row"><div class="ic">${ICON.shield}</div><div class="txt"><div class="t">ذخیره‌سازی کاملاً محلی</div><div class="d">تمام داده‌ها فقط روی همین دستگاه ذخیره می‌شوند و هیچ درخواستی به اینترنت ارسال نمی‌شود.</div></div></div>
       </div>
 
+      <div class="section-title"><h2>عیب‌یابی دریافت پیامک</h2></div>
+      <div class="card">
+        <div class="settings-row">
+          <div class="ic">${ICON.sms}</div>
+          <div class="txt"><div class="t">فقط در نسخه‌ی نصب‌شده‌ی اندروید کاربرد دارد</div><div class="d">اگر تراکنشی که اعلانش آمده در کارتابل نیست، این دو دکمه را بزنید</div></div>
+        </div>
+        <button class="btn btn-outline mt-8" id="btn-check-sms-status">بررسی وضعیت اتصال به افزونه</button>
+        <button class="btn btn-outline mt-8" id="btn-drain-sms">خواندن دستی صف پیامک‌های در انتظار</button>
+      </div>
+
       <button class="btn btn-danger mt-24" id="btn-wipe">${ICON.trash} پاک‌سازی کامل داده‌ها</button>
       <p class="text-muted mt-16" style="font-size:11px; text-align:center;">نسخه ۱.۰.۰ — دفتر تراکنش</p>
     `);
@@ -1260,6 +1270,17 @@ const App = (() => {
     document.getElementById('row-units').onclick = () => location.hash = '#/units';
     document.getElementById('row-cats').onclick = () => location.hash = '#/categories';
     document.getElementById('row-backup').onclick = () => location.hash = '#/backup';
+    document.getElementById('btn-check-sms-status').onclick = async () => {
+      const plugin = window.Capacitor?.Plugins?.SmsReceiver;
+      if (!plugin) return toast('افزونه‌ی بومی پیدا نشد — طبیعی است اگر در مرورگر/PWA هستید، نه در اپ نصب‌شده');
+      try {
+        await plugin.requestSmsPermission();
+        toast('افزونه در دسترس است و مجوز با موفقیت تأیید شد ✓');
+      } catch (e) {
+        toast('افزونه در دسترس است ولی مجوز/درخواست خطا داد: ' + (e?.message || String(e)));
+      }
+    };
+    document.getElementById('btn-drain-sms').onclick = () => drainPendingNativeSms({ manual: true });
     document.getElementById('btn-wipe').onclick = async () => {
       const ok = await confirmDialog('همه داده‌ها (تراکنش‌ها، واحدها، دسته‌بندی‌ها) برای همیشه پاک شوند؟');
       if (!ok) return;
@@ -1338,10 +1359,12 @@ const App = (() => {
   // یک پیامک خام را پردازش و به‌عنوان تراکنش «جدید» در کارتابل ثبت می‌کند
   async function ingestRawSms(body) {
     const parsed = SmsParser.parse(body || '');
-    await DB.add('transactions', {
+    console.log('[SMS] در حال ثبت پیامک؛ نتیجه‌ی تجزیه:', parsed);
+    const newId = await DB.add('transactions', {
       ...parsed, status: 'new', unitId: null, categoryId: null, accountId: null,
       description: '', tags: [], createdAt: new Date().toISOString(),
     });
+    console.log('[SMS] تراکنش با شناسه‌ی', newId, 'در دیتابیس ثبت شد');
     const notifEnabled = (await DB.get('settings', 'notifEnabled'))?.value ?? true;
     if (notifEnabled && 'Notification' in window && Notification.permission === 'granted') {
       new Notification('تراکنش جدید', { body: `${parsed.bankName} — ${toFa(toman(parsed.amount || 0))} تومان` });
@@ -1352,47 +1375,71 @@ const App = (() => {
   // پیامک‌هایی که وقتی برنامه کاملاً بسته بود توسط گیرنده‌ی ایستا (SmsBroadcastReceiver.kt)
   // در سمت اندروید ذخیره شده‌اند را می‌خواند و به دیتابیس محلی اضافه می‌کند.
   // باید در ابتدای اجرا و هر بار که برنامه به foreground برمی‌گردد صدا زده شود.
-  async function drainPendingNativeSms() {
+  // options.manual=true یعنی این فراخوانی از دکمه‌ی «تست دستی» در تنظیمات آمده و
+  // باید همیشه (حتی وقتی چیزی پیدا نشد یا خطا داد) نتیجه را به کاربر نشان دهد —
+  // برای عیب‌یابی روی خود گوشی، بدون نیاز به adb logcat.
+  async function drainPendingNativeSms(options = {}) {
+    const manual = options.manual === true;
     const plugin = window.Capacitor?.Plugins?.SmsReceiver;
-    if (!plugin || typeof plugin.getPendingSms !== 'function') return;
+    if (!plugin || typeof plugin.getPendingSms !== 'function') {
+      console.warn('[SMS] پلاگین SmsReceiver یا متد getPendingSms در دسترس نیست');
+      if (manual) toast('پلاگین SmsReceiver پیدا نشد (window.Capacitor.Plugins.SmsReceiver)');
+      return;
+    }
     try {
       const res = await plugin.getPendingSms();
       const items = res?.items || [];
+      console.log('[SMS] getPendingSms نتیجه داد:', items.length, 'مورد', res);
+      if (manual) toast(`${toFa(items.length)} پیامک در صف پیدا شد`);
       if (!items.length) return;
-      for (const item of items) await ingestRawSms(item.body);
-      toast(`${toFa(items.length)} پیامک بانکی جدید پردازش شد`);
+      for (const item of items) {
+        try { await ingestRawSms(item.body); }
+        catch (err) { console.error('[SMS] خطا در ثبت یک پیامک از صف:', err, item); }
+      }
+      if (!manual) toast(`${toFa(items.length)} پیامک بانکی جدید پردازش شد`);
       router();
-    } catch (e) { /* افزونه در دسترس نیست یا خطای غیرمنتظره */ }
+    } catch (e) {
+      console.error('[SMS] خطا در drainPendingNativeSms:', e);
+      if (manual) toast('خطا در خواندن صف: ' + (e?.message || String(e)));
+    }
   }
 
   async function connectNativeSmsIfAvailable() {
     const plugin = window.Capacitor?.Plugins?.SmsReceiver;
-    if (!plugin) return; // در نسخه وب PWA این افزونه وجود ندارد؛ کاملاً طبیعی است
+    if (!plugin) { console.log('[SMS] در محیط وب/PWA هستیم؛ افزونه‌ی بومی وجود ندارد (طبیعی است)'); return; }
     const enabled = (await DB.get('settings', 'smsEnabled'))?.value ?? true;
-    if (!enabled) return;
+    if (!enabled) { console.log('[SMS] دریافت پیامک در تنظیمات غیرفعال است'); return; }
+
+    // هر مرحله جدا try/catch دارد تا یک خطا باعث متوقف‌شدن کل زنجیره نشود و در
+    // Console قابل مشاهده باشد (نسخه‌ی قبلی همه را در یک catch خاموش می‌کرد).
     try {
       await plugin.requestSmsPermission();
+      console.log('[SMS] requestSmsPermission با موفقیت resolve شد');
+    } catch (e) {
+      console.error('[SMS] requestSmsPermission شکست خورد (احتمالاً مجوز رد شده):', e);
+      return;
+    }
 
-      // ۱) هر پیامکی که وقتی برنامه بسته بود دریافت شده، همین الان پردازش شود
-      await drainPendingNativeSms();
+    try { await drainPendingNativeSms(); }
+    catch (e) { console.error('[SMS] خواندن اولیه‌ی صف شکست خورد:', e); }
 
-      // ۲) از این لحظه به بعد، هر بار پیامکی برسد (چه برنامه باز باشد چه در پس‌زمینه)،
-      // سمت اندروید یک «زنگ خبر» بی‌محتوا می‌فرستد. تراکنش هرگز مستقیماً از روی
-      // این رویداد ساخته نمی‌شود — تنها کاری که می‌کند این است که همین الان یک بار
-      // دیگر صفِ SharedPreferences را (که SmsBroadcastReceiver.kt پر کرده) بخوانیم.
-      // این یعنی همیشه یک مسیر واحد برای نوشتن در دیتابیس وجود دارد، نه دو مسیر
-      // مستقل که ممکن است با هم ناهم‌خوان شوند.
+    try {
       plugin.addListener('smsReceived', () => {
-        // کمی تأخیر برای اطمینان از اینکه گیرنده‌ی ایستا نوشتن در صف را تمام کرده
+        console.log('[SMS] «زنگ خبر» از سمت اندروید دریافت شد؛ صف در حال خواندن...');
         setTimeout(() => drainPendingNativeSms(), 400);
       });
+      console.log('[SMS] listener برای smsReceived ثبت شد');
+    } catch (e) { console.error('[SMS] ثبت listener شکست خورد:', e); }
 
-      // ۳) هر بار برنامه از پس‌زمینه به foreground برمی‌گردد هم صف را بررسی کن
+    try {
       const appPlugin = window.Capacitor?.Plugins?.App;
       if (appPlugin?.addListener) {
-        appPlugin.addListener('resume', () => drainPendingNativeSms());
+        appPlugin.addListener('resume', () => { console.log('[SMS] برنامه به foreground برگشت؛ صف در حال خواندن...'); drainPendingNativeSms(); });
+        console.log('[SMS] listener برای resume ثبت شد');
+      } else {
+        console.warn('[SMS] پلاگین App در دسترس نیست؛ خواندن صف فقط در باز شدن اولیه‌ی برنامه انجام می‌شود');
       }
-    } catch (e) { /* کاربر مجوز را رد کرده یا افزونه در دسترس نیست */ }
+    } catch (e) { console.error('[SMS] ثبت listener برای resume شکست خورد:', e); }
   }
 
   /* ---------------- شروع برنامه ---------------- */

@@ -39,7 +39,6 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
-import org.json.JSONArray
 
 @CapacitorPlugin(
     name = "SmsReceiver",
@@ -107,17 +106,19 @@ class SmsReceiverPlugin : Plugin() {
 
         val result = JSObject()
         try {
-            val arr = JSONArray(json)
-            result.put("items", JSArray(arr.toString()))
-            result.put("count", arr.length())
+            val jsArray = JSArray(json)
+            result.put("items", jsArray)
+            result.put("count", jsArray.length())
+            android.util.Log.d(TAG, "getPendingSms: ${jsArray.length()} مورد با موفقیت parse شد")
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "خطا در خواندن صف پیامک", e)
+            android.util.Log.e(TAG, "خطا در parse کردن صف پیامک (JSON نامعتبر؟)", e)
             result.put("items", JSArray())
             result.put("count", 0)
         }
 
         // صف را خالی می‌کنیم چون قرار است همین الان به لایه‌ی وب تحویل داده شود
         prefs.edit().putString(SmsBroadcastReceiver.KEY_PENDING_SMS, "[]").apply()
+        android.util.Log.d(TAG, "صف SharedPreferences پس از تحویل، خالی شد")
 
         call.resolve(result)
     }
