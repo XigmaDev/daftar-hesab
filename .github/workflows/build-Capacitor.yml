@@ -3,6 +3,8 @@ name: Build Android APK
 # اجرا با پوش کردن یک تگ (مثلاً v1.0.0) یا به‌صورت دستی از تب Actions
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
