@@ -5,6 +5,14 @@
 
 const App = (() => {
   const root = document.getElementById('app-shell');
+
+  // اطلاعات هویتی برنامه — همه‌جا از همین سه ثابت استفاده می‌شود
+  // (مثلاً در بخش «درباره ما» در تنظیمات) تا فقط یک‌جا نیاز به به‌روزرسانی باشد.
+  const APP_NAME = 'ریالو';
+  const APP_VERSION = '1.0.0';
+  // TODO: این آدرس را با لینک واقعی ریپوی گیت‌هاب خودتان جایگزین کنید
+  const GITHUB_URL = 'https://github.com/your-username/rialo';
+
   let STATE = {
     period: 'today',
     txFilter: { status: null, unitId: null, categoryId: null, q: '' },
@@ -83,6 +91,7 @@ const App = (() => {
     chevronL: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
     export: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    github: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55 0-.27-.01-1.16-.02-2.1-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.53-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.02 11.02 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.64 1.59.24 2.76.12 3.05.74.8 1.18 1.83 1.18 3.09 0 4.42-2.69 5.39-5.25 5.68.41.35.78 1.04.78 2.1 0 1.52-.01 2.75-.01 3.12 0 .3.2.66.79.55A10.52 10.52 0 0 0 23.5 12c0-6.27-5.23-11.5-11.5-11.5z"/></svg>',
   };
 
   /* ---------------- بارگذاری داده‌های پایه (Cache) ---------------- */
@@ -97,6 +106,17 @@ const App = (() => {
   const catColor = (id) => STATE.categoriesCache.find((c) => c.id === id)?.color || 'var(--primary)';
   const bankOf = (id) => STATE.banksCache.find((b) => b.id === id) || null;
   const accountOf = (id) => STATE.accountsCache.find((a) => a.id === id) || null;
+
+  // تلاش برای تطبیق یک پیامک تجزیه‌شده با یکی از حساب‌های ثبت‌شده، بر اساس
+  // شماره کارت (۴ رقم آخر) یا شماره حساب. اگر پیامک اصلاً شماره‌ای نداشته باشد
+  // (مثلاً پیامک‌های بلو)، چیزی پیدا نمی‌شود و کاربر باید دستی حساب را انتخاب کند.
+  function matchAccountForParsedSms(parsed) {
+    if (!parsed) return null;
+    return STATE.accountsCache.find((a) =>
+      (parsed.cardNumber && a.cardNumber && a.cardNumber.replace(/[^\d]/g, '').slice(-4) === parsed.cardNumber.replace(/[^\d]/g, '').slice(-4)) ||
+      (parsed.accountNumber && a.accountNumber && a.accountNumber === parsed.accountNumber)
+    ) || null;
+  }
 
   // موجودی فعلی هر حساب = موجودی اولیه + مجموع واریزها − مجموع برداشت‌های ثبت‌شده روی همان حساب
   function accountBalance(accountId, allTx) {
@@ -257,7 +277,7 @@ const App = (() => {
     const recent = [...all].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
 
     mountPage(`
-      ${topbar('داشبورد', { subtitle: 'دفتر تراکنش · کاملاً آفلاین' })}
+      ${topbar('داشبورد', { subtitle: `${APP_NAME} · کاملاً آفلاین` })}
       <div class="balance-hero">
         <div class="label">${heroLabel}</div>
         <div class="amount">${heroBalance ? toFa(toman(heroBalance)) : '—'} <small>تومان</small></div>
@@ -467,6 +487,7 @@ const App = (() => {
     const isDeposit = t.type === 'deposit';
     let selUnit = t.unitId || null;
     let selCat = t.categoryId || null;
+    let selAccount = t.accountId || matchAccountForParsedSms(t)?.id || null;
 
     function unitsChipsHtml() {
       return STATE.unitsCache.map((u) => `<button type="button" class="chip-select ${selUnit === u.id ? 'active' : ''}" data-id="${u.id}">${escapeHtml(u.name)}</button>`).join('')
@@ -476,6 +497,13 @@ const App = (() => {
       return STATE.categoriesCache.map((c) => `<button type="button" class="chip-select ${selCat === c.id ? 'active' : ''}" data-id="${c.id}">${escapeHtml(c.name)}</button>`).join('')
         + `<button type="button" class="chip-select" id="qc-add-cat">${ICON.plus} جدید</button>`;
     }
+    function accountsChipsHtml() {
+      return STATE.accountsCache.map((a) => {
+        const b = bankOf(a.bankId);
+        const label = `${b ? b.name.replace('بانک ', '') : 'نامشخص'} — ${a.title || 'حساب'}`;
+        return `<button type="button" class="chip-select ${selAccount === a.id ? 'active' : ''}" data-id="${a.id}">${escapeHtml(label)}</button>`;
+      }).join('');
+    }
     function addRowHtml(placeholder, saveId, inputId) {
       return `<div style="display:flex; gap:8px; margin-top:8px;">
         <input id="${inputId}" placeholder="${placeholder}" style="flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px;" />
@@ -483,12 +511,23 @@ const App = (() => {
       </div>`;
     }
 
+    const accountFieldHtml = STATE.accountsCache.length ? `
+      <div class="field">
+        <label>حساب${!t.accountId && !matchAccountForParsedSms(t) ? ' <span class="text-muted" style="font-weight:500;">(در پیامک شماره حساب/کارت پیدا نشد — دستی انتخاب کنید)</span>' : ''}</label>
+        <div class="chip-row" id="qc-accounts">${accountsChipsHtml()}</div>
+      </div>` : `
+      <div class="field">
+        <label>حساب</label>
+        <p class="text-muted" style="font-size:12px; line-height:1.8;">هنوز حسابی ثبت نکرده‌اید — از تنظیمات ← بانک‌ها و حساب‌ها اضافه کنید.</p>
+      </div>`;
+
     const sheet = openSheet(`
       <h3>دسته‌بندی سریع</h3>
       <div class="detail-amount" style="padding:4px 0 14px;">
         <div class="v ${isDeposit ? 'deposit' : 'withdraw'}" style="font-size:22px;">${isDeposit ? '+' : '−'} ${money(t.amount)}</div>
         <div class="bank-name">${escapeHtml(t.bankName || 'نامشخص')}${t.date ? ' · ' + escapeHtml(t.date) : ''}</div>
       </div>
+      ${accountFieldHtml}
       <div class="field">
         <label>واحد</label>
         <div class="chip-row" id="qc-units">${unitsChipsHtml()}</div>
@@ -502,6 +541,13 @@ const App = (() => {
       <button class="btn btn-primary" id="qc-submit">${ICON.check} ثبت و انتقال به تراکنش‌ها</button>
       <button class="btn btn-ghost mt-8" id="qc-full-edit">ویرایش کامل تراکنش</button>
     `);
+
+    if (STATE.accountsCache.length) {
+      sheet.querySelectorAll('#qc-accounts [data-id]').forEach((b) => b.onclick = () => {
+        selAccount = (selAccount === Number(b.dataset.id)) ? null : Number(b.dataset.id);
+        sheet.querySelectorAll('#qc-accounts [data-id]').forEach((x) => x.classList.toggle('active', Number(x.dataset.id) === selAccount));
+      });
+    }
 
     function bindUnitChips() {
       sheet.querySelectorAll('#qc-units [data-id]').forEach((b) => b.onclick = () => {
@@ -549,6 +595,7 @@ const App = (() => {
     sheet.querySelector('#qc-submit').onclick = async () => {
       t.unitId = selUnit;
       t.categoryId = selCat;
+      t.accountId = selAccount;
       t.status = 'reviewed';
       await DB.put('transactions', t);
       closeSheet();
@@ -779,10 +826,7 @@ const App = (() => {
             x.classList.toggle(parsed.type, x.dataset.type === parsed.type);
           });
         }
-        const matchedAccount = STATE.accountsCache.find((a) =>
-          (parsed.cardNumber && a.cardNumber && a.cardNumber.replace(/[^\d]/g, '').slice(-4) === parsed.cardNumber.replace(/[^\d]/g, '').slice(-4)) ||
-          (parsed.accountNumber && a.accountNumber && a.accountNumber === parsed.accountNumber)
-        );
+        const matchedAccount = matchAccountForParsedSms(parsed);
         if (matchedAccount) {
           document.getElementById('f-account').value = matchedAccount.id;
           document.getElementById('f-bank').value = bankOf(matchedAccount.bankId)?.name || document.getElementById('f-bank').value;
@@ -964,7 +1008,7 @@ const App = (() => {
     });
   }
 
-  const PALETTE = ['#114B4F', '#C99A3E', '#2E7D5B', '#B4433B', '#3E7CB1', '#8A5FB0', '#5B8C7B', '#B0793E'];
+  const PALETTE = ['#0D3A42', '#C9A227', '#1E8F63', '#C1453A', '#3E7CB1', '#8A5FB0', '#5B8C7B', '#B0793E'];
 
   function unitEditorSheet(existing) {
     const sheet = openSheet(`
@@ -1254,8 +1298,25 @@ const App = (() => {
         <button class="btn btn-outline mt-8" id="btn-drain-sms">خواندن دستی صف پیامک‌های در انتظار</button>
       </div>
 
+      <div class="section-title"><h2>درباره ما</h2></div>
+      <div class="card" style="text-align:center; padding:26px 18px;">
+        <div style="width:60px; height:60px; margin:0 auto 12px; border-radius:16px; background:var(--primary); display:flex; align-items:center; justify-content:center;">
+          <svg viewBox="0 0 40 40" width="30" height="30">
+            <text x="20" y="29" text-anchor="middle" font-family="'Segoe UI', Tahoma, sans-serif" font-weight="800" font-size="24" fill="var(--accent)">R</text>
+          </svg>
+        </div>
+        <h3 style="font-size:16px;">${APP_NAME}</h3>
+        <p class="text-muted" style="font-size:12.5px; line-height:1.9; margin-top:8px; max-width:280px; margin-inline:auto;">
+          دستیار شخصی و کاملاً آفلاین برای مدیریت تراکنش‌های بانکی — بدون هیچ سرور یا
+          اتصال اینترنتی؛ تمام داده‌ها فقط روی همین گوشی می‌مانند.
+        </p>
+        <p class="text-muted" style="font-size:11.5px; margin-top:12px;">نسخه ${APP_VERSION}</p>
+        <a href="${GITHUB_URL}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost mt-16" style="text-decoration:none; display:inline-flex; width:auto; padding:10px 20px;">
+          ${ICON.github} مشاهده در گیت‌هاب
+        </a>
+      </div>
+
       <button class="btn btn-danger mt-24" id="btn-wipe">${ICON.trash} پاک‌سازی کامل داده‌ها</button>
-      <p class="text-muted mt-16" style="font-size:11px; text-align:center;">نسخه ۱.۰.۰ — دفتر تراکنش</p>
     `);
 
     document.getElementById('sw-sms').onchange = (e) => DB.put('settings', { key: 'smsEnabled', value: e.target.checked });
@@ -1360,8 +1421,10 @@ const App = (() => {
   async function ingestRawSms(body) {
     const parsed = SmsParser.parse(body || '');
     console.log('[SMS] در حال ثبت پیامک؛ نتیجه‌ی تجزیه:', parsed);
+    const matchedAccount = matchAccountForParsedSms(parsed);
+    if (matchedAccount) console.log('[SMS] با حساب موجود تطبیق داده شد:', matchedAccount);
     const newId = await DB.add('transactions', {
-      ...parsed, status: 'new', unitId: null, categoryId: null, accountId: null,
+      ...parsed, status: 'new', unitId: null, categoryId: null, accountId: matchedAccount?.id || null,
       description: '', tags: [], createdAt: new Date().toISOString(),
     });
     console.log('[SMS] تراکنش با شناسه‌ی', newId, 'در دیتابیس ثبت شد');

@@ -1,7 +1,7 @@
 {
-  "name": "daftar-tarakonesh",
+  "name": "rialo",
   "version": "1.0.0",
-  "description": "PWA آفلاین مدیریت تراکنش‌های بانکی — بسته‌بندی‌شده با Capacitor برای اندروید",
+  "description": "ریالو — دستیار شخصی و کاملاً آفلاین مدیریت تراکنش‌های بانکی؛ بسته‌بندی‌شده با Capacitor برای اندروید",
   "private": true,
   "scripts": {
     "android:add": "npx cap add android",

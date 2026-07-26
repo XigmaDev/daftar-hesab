@@ -1,5 +1,5 @@
 /* ==========================================================================
-   دفتر تراکنش — سیستم طراحی
+   ریالو — سیستم طراحی
    الهام‌گرفته از Material Design 3، با هویت بصری اختصاصی:
    رنگ اصلی «سبز-نیلی دفتری» + طلایی برنجی به‌عنوان رنگ تاکیدی،
    و نگاره‌ی ستاره‌ی هشت‌پر (گره‌چینی ایرانی) به‌عنوان امضای بصری.
@@ -13,25 +13,25 @@
 }
 
 :root {
-  --bg: #EEF4F1;
+  --bg: #EDF3F2;
   --surface: #FFFFFF;
-  --surface-alt: #E6EFEA;
+  --surface-alt: #E4EDEB;
   --surface-raised: #FFFFFF;
-  --primary: #114B4F;
-  --primary-dark: #0B3436;
-  --on-primary: #F3FBF8;
-  --accent: #C99A3E;
-  --accent-soft: #F1E2BE;
-  --deposit: #2E7D5B;
-  --deposit-soft: #DCEEE4;
-  --withdraw: #B4433B;
-  --withdraw-soft: #F6DEDC;
-  --text: #14201F;
-  --text-muted: #5B6A66;
-  --text-faint: #8A9995;
-  --border: #D8E2DE;
-  --shadow: 0 6px 20px -8px rgba(11, 52, 54, 0.28);
-  --shadow-sm: 0 2px 8px -2px rgba(11, 52, 54, 0.18);
+  --primary: #0D3A42;
+  --primary-dark: #07252B;
+  --on-primary: #F2F9F7;
+  --accent: #C9A227;
+  --accent-soft: #F1E4B8;
+  --deposit: #1E8F63;
+  --deposit-soft: #DAEEE3;
+  --withdraw: #C1453A;
+  --withdraw-soft: #F6DCD9;
+  --text: #12201F;
+  --text-muted: #56675F;
+  --text-faint: #869790;
+  --border: #D6E1DE;
+  --shadow: 0 6px 20px -8px rgba(7, 37, 43, 0.30);
+  --shadow-sm: 0 2px 8px -2px rgba(7, 37, 43, 0.18);
   --radius-lg: 24px;
   --radius-md: 16px;
   --radius-sm: 10px;
@@ -41,23 +41,23 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0B1716;
-  --surface: #10201F;
-  --surface-alt: #16302D;
-  --surface-raised: #14302D;
-  --primary: #52A79A;
-  --primary-dark: #0B3436;
-  --on-primary: #06201E;
-  --accent: #E0B564;
-  --accent-soft: #3B331C;
-  --deposit: #56C596;
-  --deposit-soft: #143327;
-  --withdraw: #E58A80;
+  --bg: #0A1615;
+  --surface: #0F1F1E;
+  --surface-alt: #152C2A;
+  --surface-raised: #13302D;
+  --primary: #4FA89B;
+  --primary-dark: #07252B;
+  --on-primary: #05201D;
+  --accent: #E2BB5C;
+  --accent-soft: #3A331C;
+  --deposit: #55C596;
+  --deposit-soft: #133327;
+  --withdraw: #E38B7E;
   --withdraw-soft: #391B18;
   --text: #E7F1EE;
-  --text-muted: #9FB6B0;
-  --text-faint: #6D8985;
-  --border: #1E3937;
+  --text-muted: #9DB4AE;
+  --text-faint: #6B8783;
+  --border: #1D3735;
   --shadow: 0 6px 24px -8px rgba(0, 0, 0, 0.5);
   --shadow-sm: 0 2px 10px -2px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
@@ -150,7 +150,7 @@ main.page {
   overflow: hidden;
   border-radius: var(--radius-lg);
   padding: 22px 20px;
-  background: radial-gradient(120% 140% at 100% 0%, #1B5F62 0%, var(--primary) 45%, var(--primary-dark) 100%);
+  background: radial-gradient(120% 140% at 100% 0%, #1A5A62 0%, var(--primary) 45%, var(--primary-dark) 100%);
   color: var(--on-primary);
   box-shadow: var(--shadow);
 }
@@ -419,7 +419,7 @@ main.page {
 .splash {
   position: fixed; inset: 0; z-index: 100;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: radial-gradient(120% 100% at 50% 0%, #1B5F62 0%, var(--primary-dark) 60%);
+  background: radial-gradient(120% 100% at 50% 0%, #1A5A62 0%, var(--primary-dark) 60%);
   color: var(--on-primary);
 }
 .splash::before { content:""; position:absolute; inset:0; background-image: var(--girih-pattern); background-size:140px 140px; opacity:.08; }

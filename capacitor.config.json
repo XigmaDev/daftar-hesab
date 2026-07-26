@@ -1,6 +1,6 @@
 {
   "appId": "ir.local.daftartarakonesh",
-  "appName": "دفتر تراکنش",
+  "appName": "ریالو",
   "webDir": "www",
   "bundledWebRuntime": false,
   "server": {
@@ -12,7 +12,7 @@
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 800,
-      "backgroundColor": "#0B3436",
+      "backgroundColor": "#07252B",
       "showSpinner": false
     }
   }

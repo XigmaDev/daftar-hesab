@@ -6,22 +6,22 @@ const Seed = (() => {
 
   const SAMPLE_UNITS = [
     { name: 'شخصی', color: '#5B8C7B' },
-    { name: 'مالی', color: '#C99A3E' },
+    { name: 'مالی', color: '#C9A227' },
     { name: 'فروش', color: '#3E7CB1' },
     { name: 'پروژه الف', color: '#8A5FB0' },
   ];
 
   const SAMPLE_CATEGORIES = [
-    { name: 'خرید', color: '#B4433B' },
-    { name: 'حقوق', color: '#2E7D5B' },
-    { name: 'قبوض', color: '#C99A3E' },
+    { name: 'خرید', color: '#C1453A' },
+    { name: 'حقوق', color: '#1E8F63' },
+    { name: 'قبوض', color: '#C9A227' },
     { name: 'اجاره', color: '#8A5FB0' },
     { name: 'انتقال', color: '#3E7CB1' },
     { name: 'دریافت پروژه', color: '#5B8C7B' },
   ];
 
   const SAMPLE_BANKS = [
-    { name: 'بانک ملت', color: '#114B4F' },
+    { name: 'بانک ملت', color: '#0D3A42' },
     { name: 'بانک سامان', color: '#3E7CB1' },
   ];
 
