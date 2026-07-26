@@ -137,21 +137,14 @@ class SmsReceiverPlugin : Plugin() {
 }
 
 /*
-  ثبت افزونه — در MainActivity.java پروژه‌ی Capacitor (مسیر:
-  android/app/src/main/java/ir/local/daftartarakonesh/MainActivity.java) اضافه کنید:
+  ثبت افزونه — این مهم‌ترین قدم است و اگر انجام نشود،
+  window.Capacitor.Plugins.SmsReceiver در جاوااسکریپت همیشه undefined می‌ماند
+  (دقیقاً همان چیزی که با دکمه‌ی «بررسی وضعیت اتصال» در تنظیمات قابل تشخیص است).
 
-      import ir.local.daftartarakonesh.SmsReceiverPlugin;
-      ...
-      public class MainActivity extends BridgeActivity {
-        @Override
-        public void onCreate(Bundle savedInstanceState) {
-          registerPlugin(SmsReceiverPlugin.class);
-          super.onCreate(savedInstanceState);
-        }
-      }
+  به‌جای ویرایش دستی MainActivity، فایل آماده‌ی MainActivity.java (یا
+  MainActivity.kt اگر پروژه‌ی شما Kotlin است) را از همین پوشه کپی و جایگزین
+  فایل موجودتان کنید — نگاه کنید به بخش «مراحل بسته‌بندی» در README.md.
 
-  نکته‌ی مهم: registerPlugin باید قبل از super.onCreate فراخوانی شود.
-
-  اگر MainActivity.java وجود نداشت (بعضی نسخه‌های Capacitor آن را نمی‌سازند)،
-  آن را داخل همان مسیر با محتوای بالا ایجاد کنید.
+  برای اطمینان، بعد از کپی این دستور باید حداقل یک نتیجه چاپ کند:
+      grep -r "registerPlugin(SmsReceiverPlugin" android/app/src/main/java/
 */

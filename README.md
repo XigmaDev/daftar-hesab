@@ -10,10 +10,13 @@
 
 ## ۱. اجرای سریع (تست در مرورگر / نصب PWA)
 
-چون PWA باید از طریق HTTP سرو شود (نه باز کردن مستقیم فایل)، یک سرور ساده محلی راه بیندازید:
+فایل‌های وب برنامه داخل پوشه‌ی `www/` هستند (این ساختار عمداً این‌طور است تا
+`webDir` در `capacitor.config.json` مقدار معتبری داشته باشد — نگاه کنید به
+بخش ۳). چون PWA باید از طریق HTTP سرو شود (نه باز کردن مستقیم فایل)، یک سرور
+ساده محلی راه بیندازید:
 
 ```bash
-cd persian-bank-pwa
+cd persian-bank-pwa/www
 python3 -m http.server 8080
 # یا
 npx serve .
@@ -23,8 +26,9 @@ npx serve .
 سه‌نقطه گزینه‌ی «افزودن به صفحه اصلی / نصب برنامه» را انتخاب کنید. برنامه به‌صورت کامل
 آفلاین نصب و اجرا می‌شود (Service Worker تمام فایل‌های لازم را از پیش کش می‌کند).
 
-برای دیپلوی واقعی، کافی است همین پوشه را روی هر هاست استاتیک (GitHub Pages، Netlify،
-یا حتی یک وب‌سرور محلی روی خود گوشی) قرار دهید — هیچ Backend لازم نیست.
+برای دیپلوی واقعی، کافی است محتوای پوشه‌ی `www/` (نه کل ریپو) را روی هر هاست
+استاتیک (GitHub Pages، Netlify، یا حتی یک وب‌سرور محلی روی خود گوشی) قرار دهید
+— هیچ Backend لازم نیست.
 
 ## ۲. نکته‌ی مهم درباره‌ی دریافت خودکار پیامک
 
@@ -69,21 +73,77 @@ npx serve .
      پویا فقط باعث می‌شود آن مسیر سریع‌تر (بدون نیاز به بستن/باز کردن برنامه)
      اجرا شود.
 
-  مراحل بسته‌بندی:
+  ### روش پیشنهادی: ساخت خودکار APK با GitHub Actions
+
+  یک workflow آماده در `.github/workflows/build-android.yml` قرار دارد که تمام
+  مراحل دستی زیر (افزودن پلتفرم اندروید، کپی فایل‌های Kotlin، فعال‌سازی Kotlin
+  در Gradle، پچ کردن AndroidManifest، و **ثبت پلاگین در MainActivity**) را
+  خودش و به‌صورت خودکار انجام می‌دهد و در پایان یک APK قابل نصب می‌سازد.
+
+  کافی است این ریپو را در گیت‌هاب push کنید؛ workflow با هر پوش به شاخه‌ی
+  `main`، با پوش کردن یک تگ نسخه (مثلاً `v1.0.0` — که یک Release رسمی هم
+  می‌سازد)، یا دستی از تب Actions اجرا می‌شود. APK ساخته‌شده هم به‌عنوان
+  Artifact قابل دانلود است و هم (اگر تگ زده باشید یا نه) در بخش Releases
+  ریپو قرار می‌گیرد.
+
+  **امضای نسخه‌ی Release (اختیاری):** بدون تنظیم، workflow یک APK نوع Debug
+  می‌سازد که برای نصب مستقیم روی گوشی خودتان کاملاً کافی است. اگر نسخه‌ی
+  امضاشده (Release) می‌خواهید، این چهار Secret را در تنظیمات ریپو (Settings ←
+  Secrets and variables ← Actions) اضافه کنید: `KEYSTORE_BASE64` (فایل
+  keystore با `base64` انکود شده)، `KEYSTORE_PASSWORD`، `KEY_ALIAS`،
+  `KEY_PASSWORD`.
+
+  **نکته‌ی مهم درباره‌ی این workflow:** نسخه‌ی اولیه‌ای که ممکن است جایی دیده
+  باشید، یک باگ ظریف داشت — `registerPlugin` را طوری درج می‌کرد که یا اصلاً
+  به MainActivity اضافه نمی‌شد (چون Capacitor نسخه‌های جدید به‌صورت پیش‌فرض
+  اصلاً متد `onCreate` را override نمی‌کند) یا در جای اشتباه (بعد از
+  `super.onCreate`) قرار می‌گرفت — که همان چیزی است که باعث می‌شد
+  `window.Capacitor.Plugins.SmsReceiver` در برنامه‌ی نصب‌شده همیشه `undefined`
+  بماند، دقیقاً مثل مشکلی که در تست دستی این پروژه هم پیش آمد. نسخه‌ی فعلی این
+  فایل هر سه حالت ممکن (Java با/بدون onCreate از قبل، و Kotlin با/بدون بدنه‌ی
+  کلاس) را پوشش می‌دهد و روی هرکدام تست شده است.
+
+  ### روش دستی (Android Studio، برای توسعه و دیباگ محلی)
+
+  مراحل بسته‌بندی (قدم‌به‌قدم و قابل‌تأیید — چون در تست واقعی مشخص شد که ثبت
+  دستی پلاگین در MainActivity راحت از قلم می‌افتد، اینجا با دستور `find` هم
+  مسیرها را پیدا می‌کنیم هم نتیجه را تأیید می‌کنیم):
+
   ```bash
   npm install
   npx cap add android
-  # هر دو فایل زیر را به این مسیر کپی کنید:
-  #   android/app/src/main/java/ir/local/daftartarakonesh/
-  #   - SmsBroadcastReceiver.kt
-  #   - SmsReceiverPlugin.kt
-  # مجوزها + تگ <receiver> داخل AndroidManifest-additions.xml را به
-  # android/app/src/main/AndroidManifest.xml اضافه کنید (داخل <manifest> و <application>)
-  # registerPlugin(SmsReceiverPlugin.class) را در MainActivity اضافه کنید (نکات دقیق
-  # در پایان فایل SmsReceiverPlugin.kt نوشته شده)
+
+  # ۱) اول ببینید مسیر پکیج واقعی شما کجاست (باید ir/local/daftartarakonesh باشد،
+  #    مگر اینکه appId را در capacitor.config.json عوض کرده باشید):
+  find android -name "MainActivity.*"
+  #   → مثلاً چاپ می‌کند:
+  #   android/app/src/main/java/ir/local/daftartarakonesh/MainActivity.java
+
+  # ۲) هر سه فایل Kotlin را به همان پوشه کپی کنید:
+  cp android-native-sample/SmsBroadcastReceiver.kt android-native-sample/SmsReceiverPlugin.kt \
+     android/app/src/main/java/ir/local/daftartarakonesh/
+
+  # ۳) فایل MainActivity.java موجود را با نسخه‌ی آماده جایگزین کنید
+  #    (اگر پروژه‌ی شما MainActivity.kt دارد نه .java، از MainActivity.kt استفاده کنید):
+  cp android-native-sample/MainActivity.java android/app/src/main/java/ir/local/daftartarakonesh/MainActivity.java
+
+  # ۴) مجوزها + تگ <receiver> داخل AndroidManifest-additions.xml را دستی به
+  #    android/app/src/main/AndroidManifest.xml اضافه کنید (داخل <manifest> و <application>)
+
+  # ۵) تأیید نهایی قبل از Build — این خط باید در MainActivity دیده شود:
+  grep -r "registerPlugin(SmsReceiverPlugin" android/app/src/main/java/
+  #   اگر هیچ‌چیز چاپ نشد، یعنی مرحله‌ی ۳ درست انجام نشده و باز هم
+  #   window.Capacitor.Plugins.SmsReceiver در برنامه undefined خواهد بود.
+
   npx cap sync android
   npx cap open android   # ساخت APK/AAB نهایی در Android Studio
   ```
+
+  **نکته‌ی مهم درباره‌ی `npx cap add android` تکراری:** اگر پوشه‌ی `android/` را
+  قبلاً ساخته‌اید و دوباره `npx cap add android` را اجرا کنید، ممکن است
+  `MainActivity` بازنویسی و ویرایش شما پاک شود. برای Build‌های بعدی فقط از
+  `npx cap sync android` استفاده کنید (این دستور کاری با MainActivity ندارد).
+
   این مرحله نیازمند Android Studio و ساخت روی دستگاه واقعی است و در این محیط قابل
   Build و تست خودکار نیست؛ کد به‌صورت مرجع کامل، مستند و با لاگ‌گذاری (`Log.d`) برای
   عیب‌یابی ارائه شده است.
@@ -104,14 +164,22 @@ npx serve .
 
   اگر این دو کافی نبود، به همین ترتیب یکی‌یکی بررسی کنید:
 
-  1. **آیا افزونه اصلاً ثبت شده؟** در Chrome روی گوشی، از طریق
-     `chrome://inspect` به WebView برنامه وصل شوید و در Console بنویسید:
-     `window.Capacitor.Plugins.SmsReceiver` — اگر `undefined` بود، یعنی
-     `registerPlugin(SmsReceiverPlugin.class)` در `MainActivity` انجام نشده یا
-     مسیر پکیج Kotlin با `applicationId` در `build.gradle` یکی نیست. همچنین در
-     همان Console، تب Console خطاهای قرمز رنگ را چک کنید — چون از این نسخه به
-     بعد دیگر هیچ خطایی به‌صورت خاموش (silent) قورت داده نمی‌شود و همه‌چیز با
-     پیشوند `[SMS]` لاگ می‌شود.
+  1. **آیا افزونه اصلاً ثبت شده؟** اگر دکمه‌ی «بررسی وضعیت اتصال» می‌گوید افزونه
+     پیدا نشد، یعنی `registerPlugin(SmsReceiverPlugin.class)` در `MainActivity`
+     اجرا نشده — رایج‌ترین علتش این است که آن دو خط اصلاً به `MainActivity`
+     اضافه نشده (یک قدم دستی که خیلی راحت از قلم می‌افتد). ساده‌ترین و
+     مطمئن‌ترین راه‌حل: فایل آماده‌ی `MainActivity.java` (یا `.kt`) را از
+     `android-native-sample/` کپی و جایگزین فایل موجود پروژه‌تان کنید (نگاه کنید
+     به بخش «مراحل بسته‌بندی» بالا)، سپس این دستور را اجرا کنید تا مطمئن شوید
+     واقعاً جایگزین شده:
+     ```bash
+     grep -r "registerPlugin(SmsReceiverPlugin" android/app/src/main/java/
+     ```
+     اگر چیزی چاپ نشد، فایل در مسیر اشتباه کپی شده یا `npx cap add android` را
+     بعد از ویرایش دوباره اجرا کرده‌اید (که MainActivity را بازنویسی می‌کند).
+     برای بررسی دقیق‌تر، در Chrome روی گوشی از طریق `chrome://inspect` به WebView
+     برنامه وصل شوید و در Console بنویسید: `window.Capacitor.Plugins.SmsReceiver`
+     — باید یک آبجکت برگرداند، نه `undefined`.
   2. **آیا مجوز واقعاً داده شده؟** در گوشی: تنظیمات ← اپ‌ها ← دفتر تراکنش ← مجوزها
      ← پیامک، باید «مجاز» باشد. اگر باکس درخواست مجوز اصلاً باز نشد، مرحله‌ی ۱ را
      دوباره چک کنید.
@@ -145,22 +213,27 @@ npx serve .
 
 ```
 persian-bank-pwa/
-├── index.html                 صفحه اصلی، اسپلش، درخواست مجوز اولیه، قفل PIN
-├── manifest.json               Web App Manifest (نصب PWA)
-├── sw.js                       Service Worker (کش کامل برای اجرای آفلاین)
-├── package.json / capacitor.config.json   بسته‌بندی اختیاری برای اندروید
-├── css/
-│   └── style.css               سیستم طراحی (رنگ، تایپوگرافی، کامپوننت‌ها، تم تیره/روشن)
-├── js/
-│   ├── db.js                   لایه دیتابیس (IndexedDB) — Repository Pattern
-│   ├── smsParser.js            تشخیص بانک + استخراج اطلاعات با Regex
-│   ├── charts.js                نمودار خطی و دایره‌ای با SVG خام (بدون کتابخانه)
-│   ├── seed.js                  داده نمونه برای تست اولیه
-│   └── app.js                   Router + رندر تمام صفحات + منطق برنامه
-├── icons/                      آیکون‌های PWA (192، 512، maskable)
+├── www/                        تمام فایل‌های وب PWA (این پوشه = webDir در Capacitor)
+│   ├── index.html                صفحه اصلی، اسپلش، درخواست مجوز اولیه، قفل PIN
+│   ├── manifest.json             Web App Manifest (نصب PWA)
+│   ├── sw.js                     Service Worker (کش کامل برای اجرای آفلاین)
+│   ├── css/
+│   │   └── style.css             سیستم طراحی (رنگ، تایپوگرافی، کامپوننت‌ها، تم تیره/روشن)
+│   ├── js/
+│   │   ├── db.js                   لایه دیتابیس (IndexedDB) — Repository Pattern
+│   │   ├── smsParser.js            تشخیص بانک + استخراج اطلاعات با Regex
+│   │   ├── charts.js                نمودار خطی و دایره‌ای با SVG خام (بدون کتابخانه)
+│   │   ├── seed.js                  داده نمونه برای تست اولیه
+│   │   └── app.js                   Router + رندر تمام صفحات + منطق برنامه
+│   └── icons/                    آیکون‌های PWA (192، 512، maskable)
+├── package.json / capacitor.config.json   بسته‌بندی اختیاری برای اندروید (webDir: "www")
+├── .github/workflows/
+│   └── build-android.yml       ساخت خودکار APK با GitHub Actions (نگاه کنید به بخش ۲)
 └── android-native-sample/      کد مرجع دریافت پیامک در پس‌زمینه (Capacitor/Kotlin)
     ├── SmsBroadcastReceiver.kt       گیرنده‌ی ایستا — حتی وقتی برنامه Kill شده کار می‌کند
     ├── SmsReceiverPlugin.kt          پل Capacitor بین اندروید و app.js + صف pending
+    ├── MainActivity.java             نسخه‌ی آماده برای Build دستی (workflow خودش این را خودکار انجام می‌دهد)
+    ├── MainActivity.kt               همان، فقط اگر پروژه‌ی شما Kotlin-based است
     └── AndroidManifest-additions.xml مجوزها و ثبت گیرنده‌ی ایستا
 ```
 
