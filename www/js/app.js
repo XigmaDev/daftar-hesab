@@ -927,13 +927,15 @@ const App = (() => {
       box.innerHTML = `
         <div class="section-title"><h2>${toFa(results.length)} نتیجه — تراز: ${toFa(toman(sum))} تومان</h2></div>
         <div class="btn-row mt-8 mb-8" style="margin-bottom:14px;">
+          <button class="btn btn-ghost" id="exp-xlsx">${ICON.export} Excel</button>
           <button class="btn btn-ghost" id="exp-csv">${ICON.export} CSV</button>
           <button class="btn btn-ghost" id="exp-json">${ICON.export} JSON</button>
-          <button class="btn btn-ghost" id="exp-print">${ICON.export} چاپ / PDF</button>
         </div>
+        <button class="btn btn-ghost mt-8" id="exp-print" style="margin-bottom:14px;">${ICON.export} چاپ / PDF</button>
         <div class="tx-list">${results.map(txItemHtml).join('') || emptyInlineHtml('نتیجه‌ای یافت نشد', 'فیلترها را تغییر دهید.')}</div>
       `;
       bindTxItemClicks();
+      document.getElementById('exp-xlsx').onclick = () => exportXlsx(results);
       document.getElementById('exp-csv').onclick = () => exportCsv(results);
       document.getElementById('exp-json').onclick = () => exportJson(results);
       document.getElementById('exp-print').onclick = () => printReport(results, sum);
@@ -947,6 +949,21 @@ const App = (() => {
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
+  }
+
+  // ستون‌های مشترک بین خروجی CSV و Excel، برای جلوگیری از ناهم‌خوانی بین دو فرمت
+  function reportRows(rows) {
+    return rows.map((t) => [
+      t.bankName || '', t.type === 'deposit' ? 'واریز' : t.type === 'withdraw' ? 'برداشت' : 'نامشخص',
+      toman(t.amount) || 0, t.date || '', t.time || '',
+      unitName(t.unitId) || '', catName(t.categoryId) || '', t.description || '', t.trackingCode || '',
+    ]);
+  }
+
+  function exportXlsx(rows) {
+    const headers = ['بانک', 'نوع', 'مبلغ (تومان)', 'تاریخ', 'ساعت', 'واحد', 'دسته‌بندی', 'توضیحات', 'شماره پیگیری'];
+    XlsxExport.download(headers, reportRows(rows), 'گزارش-تراکنش‌ها.xlsx', 'گزارش تراکنش‌ها');
+    toast('فایل Excel دانلود شد');
   }
 
   function exportCsv(rows) {

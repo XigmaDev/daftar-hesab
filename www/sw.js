@@ -14,6 +14,7 @@ const APP_SHELL = [
   './js/smsParser.js',
   './js/charts.js',
   './js/seed.js',
+  './js/xlsxExport.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
