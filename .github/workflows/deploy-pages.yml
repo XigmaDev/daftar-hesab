@@ -1,0 +1,30 @@
+name: Deploy to GitHub Pages
+
+# با هر پوش به main، محتوای پوشه‌ی www/ (که خودِ PWA است) در یک برنچ جداگانه
+# به اسم gh-pages قرار می‌گیرد. گیت‌هاب پیجز از همان برنچ می‌تواند Build/Serve کند
+# — چون محتوای واقعی سایت داخل www/ است، نه ریشه‌ی ریپازیتوری (که شامل
+# android-native-sample/، package.json و فایل‌های مخصوص Capacitor هم هست).
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write   # لازم برای پوش کردن به برنچ gh-pages
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Publish www/ to the gh-pages branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./www
+          publish_branch: gh-pages
+          # هر بار فقط آخرین نسخه نگه داشته می‌شود (بدون تاریخچه‌ی سنگین روی gh-pages)
+          force_orphan: true
