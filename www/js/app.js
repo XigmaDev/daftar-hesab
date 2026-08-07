@@ -6,12 +6,9 @@
 const App = (() => {
   const root = document.getElementById('app-shell');
 
-  // اطلاعات هویتی برنامه — همه‌جا از همین سه ثابت استفاده می‌شود
-  // (مثلاً در بخش «درباره ما» در تنظیمات) تا فقط یک‌جا نیاز به به‌روزرسانی باشد.
   const APP_NAME = 'ریالو';
-  const APP_VERSION = '1.0.0';
-  // TODO: این آدرس را با لینک واقعی ریپوی گیت‌هاب خودتان جایگزین کنید
-  const GITHUB_URL = 'https://github.com/your-username/rialo';
+  const APP_VERSION = '1.0.1';
+  const GITHUB_URL = 'https://github.com/xigmadev/rialo';
 
   let STATE = {
     period: 'today',
@@ -24,7 +21,6 @@ const App = (() => {
     accountsCache: [],
   };
 
-  /* ---------------- ابزارهای کمکی ---------------- */
   const toFa = (n) => (n === null || n === undefined || isNaN(n)) ? '—' : Number(n).toLocaleString('fa-IR');
   const toman = (rial) => Math.round((rial || 0) / 10);
   const money = (rial) => `${toFa(toman(rial))} <small>تومان</small>`;

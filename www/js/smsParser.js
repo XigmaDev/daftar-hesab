@@ -16,7 +16,7 @@ const SmsParser = (() => {
     { name: 'بانک صادرات', aliases: ['صادرات', 'saderat', 'sadad'] },
     { name: 'بانک تجارت', aliases: ['تجارت', 'tejarat'] },
     { name: 'بانک سپه', aliases: ['سپه', 'sepah'] },
-    { name: 'بلو (بانک دیجیتال سپه)', aliases: ['بلو'] },
+    { name: 'بلو (بانک دیجیتال سامان)', aliases: ['بلو'] },
     { name: 'بانک سامان', aliases: ['سامان', 'saman'] },
     { name: 'بانک پاسارگاد', aliases: ['پاسارگاد', 'pasargad'] },
     { name: 'بانک آینده', aliases: ['آینده', 'ayandeh'] },
